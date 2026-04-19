@@ -997,17 +997,7 @@ if menu == "Visualisasi IPH":
     else:
         bulan_map = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"Mei", 6:"Jun", 7:"Jul", 8:"Agu", 9:"Sep", 10:"Okt", 11:"Nov", 12:"Des"}
         
-        # --- Bagian Share Link (membangun URL dengan state) ---
-        st.markdown("### 🔗 Bagikan Laporan Periode Tertentu")
-        col_share1, col_share2, col_share3 = st.columns(3)
-        with col_share1:
-            tahun_share = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="share_tahun_vis")
-        with col_share2:
-            bulan_share = st.selectbox("Bulan", sorted(df_iph[df_iph['tahun']==tahun_share]['bulan'].unique()), format_func=lambda x: bulan_map[x], key="share_bulan_vis")
-        with col_share3:
-            minggu_share = st.selectbox("Minggu ke-", sorted(df_iph[(df_iph['tahun']==tahun_share) & (df_iph['bulan']==bulan_share)]['minggu_ke'].unique()), key="share_minggu_vis")
-        
-        # Pilihan visualisasi utama (state akan di-capture)
+        # Pilihan visualisasi utama
         jenis_grafik = st.selectbox("Pilih Jenis Analisis Grafik:", [
             "Tren Harga (Bulanan/Mingguan)",
             "Andil Perubahan Harga (Frekuensi)",
@@ -1015,19 +1005,8 @@ if menu == "Visualisasi IPH":
             "Indikator Perubahan Harga (%)"
         ])
         
-        # Inisialisasi share_params
-        share_params = {
-            "view": "shared",
-            "th": tahun_share,
-            "bl": bulan_share,
-            "mg": minggu_share,
-            "chart": jenis_grafik
-        }
-        
-        # Variabel untuk menampung pilihan user (digunakan baik untuk plotting maupun share link)
-        mode = None
-        kom_pilih = []
-        th_pilih = []
+        # Inisialisasi share_params (akan diisi nanti)
+        share_params = {"view": "shared", "chart": jenis_grafik}
         
         if jenis_grafik == "Tren Harga (Bulanan/Mingguan)":
             mode = st.radio("Pilih Level Tampilan:", ["Bulanan (Perbandingan Tahun)", "Mingguan (Detail Harga Asli)"], horizontal=True)
@@ -1036,12 +1015,19 @@ if menu == "Visualisasi IPH":
                 col1, col2 = st.columns(2)
                 with col1:
                     kom_all = sorted(df_iph['komoditas'].unique())
-                    kom_pilih = st.multiselect("Pilih Komoditas", kom_all, default=kom_all[:1] if kom_all else [])
+                    default_kom = kom_all[:3] if len(kom_all) >= 3 else kom_all
+                    kom_pilih = st.multiselect("Pilih Komoditas", kom_all, default=default_kom)
                 with col2:
                     th_all = sorted(df_iph['tahun'].unique(), reverse=True)
-                    th_pilih = st.multiselect("Pilih Tahun", th_all, default=th_all[:3] if len(th_all) >= 3 else th_all)
+                    default_th = th_all[:1] if th_all else []
+                    th_pilih = st.multiselect("Pilih Tahun", th_all, default=default_th)
+                # Simpan untuk share link
+                share_params["th"] = th_pilih[0] if th_pilih else (th_all[0] if th_all else 2024)
+                share_params["bl"] = 1
+                share_params["mg"] = 1
                 share_params["kom"] = "|".join(kom_pilih)
                 share_params["thn"] = "|".join(map(str, th_pilih))
+                
                 if kom_pilih and th_pilih:
                     plot_df = df_iph[(df_iph['komoditas'].isin(kom_pilih)) & (df_iph['tahun'].isin(th_pilih))]
                     if not plot_df.empty:
@@ -1059,23 +1045,28 @@ if menu == "Visualisasi IPH":
                         cell_values = [tab_pivot['legenda'].tolist()]
                         for b in range(1,13):
                             cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
+                        n_items = len(tab_pivot)
+                        graph_height = max(600, 400 + n_items * 20)
                         fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05,
                                             row_heights=[0.6, 0.4], specs=[[{"type": "scatter"}], [{"type": "table"}]])
                         for leg in tab_pivot['legenda']:
                             data_leg = plot_df[plot_df['legenda'] == leg].sort_values('bulan')
                             fig.add_trace(go.Scatter(x=data_leg['bulan'], y=data_leg['harga'],
-                                                     mode='lines+markers', line=dict(width=3), name=leg), row=1, col=1)
+                                                     mode='lines+markers', line=dict(width=2), name=leg), row=1, col=1)
                         fig.add_trace(go.Table(header=dict(values=header_values, fill_color='#1e3a8a',
                                                            font=dict(color='white', size=12), align='center'),
                                                cells=dict(values=cell_values, fill_color='white',
                                                           align=['left'] + ['center']*12, height=25)), row=2, col=1)
-                        fig.update_layout(title="<b>Tren Harga Rata-rata Bulanan</b>", height=750,
-                                          margin=dict(l=20, r=20, t=60, b=80), plot_bgcolor='white',
-                                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                        fig.update_layout(title="<b>Tren Harga Rata-rata Bulanan</b>", height=graph_height,
+                                          margin=dict(l=20, r=150, t=60, b=80), plot_bgcolor='white',
+                                          legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.02,
+                                                      bgcolor="rgba(255,255,255,0.8)", bordercolor="lightgray", borderwidth=1))
                         fig.update_xaxes(tickmode='array', tickvals=list(range(1,13)), ticktext=list(bulan_map.values()),
                                          showgrid=True, gridcolor='lightgray', row=1, col=1)
                         fig.update_yaxes(title="Harga (Rp)", showgrid=True, gridcolor='lightgray', row=1, col=1)
                         st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning("Tidak ada data untuk pilihan ini.")
             else:  # Mingguan
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -1087,6 +1078,9 @@ if menu == "Visualisasi IPH":
                     k_m = st.multiselect("Komoditas", k_all, default=k_all[:3] if k_all else [], key="k_m_minggu")
                 minggu_tersedia = sorted(df_iph[(df_iph['tahun']==th_s) & (df_iph['bulan']==bl_s)]['minggu_ke'].unique())
                 minggu_pilih = st.multiselect("Pilih Minggu ke-", minggu_tersedia, default=minggu_tersedia, key="minggu_pilih")
+                share_params["th"] = th_s
+                share_params["bl"] = bl_s
+                share_params["mg"] = minggu_pilih[0] if minggu_pilih else 1
                 share_params["th_s"] = th_s
                 share_params["bl_s"] = bl_s
                 share_params["kom"] = "|".join(k_m)
@@ -1100,6 +1094,8 @@ if menu == "Visualisasi IPH":
                         st.write("**Tabel Harga Asli (Rp):**")
                         tab_m = plot_df.pivot_table(index='komoditas', columns='minggu_ke', values='harga', fill_value=0)
                         st.dataframe(tab_m, use_container_width=True)
+                    else:
+                        st.warning("Tidak ada data.")
         
         elif jenis_grafik == "Andil Perubahan Harga (Frekuensi)":
             df_iph['persen_change'] = pd.to_numeric(df_iph['persen_change'], errors='coerce').fillna(0)
@@ -1112,6 +1108,9 @@ if menu == "Visualisasi IPH":
                 st.dataframe(andil_df.set_index('komoditas'), use_container_width=True)
             else:
                 st.info("Belum ada data perubahan harga.")
+            share_params["th"] = df_iph['tahun'].max()
+            share_params["bl"] = 1
+            share_params["mg"] = 1
         
         elif jenis_grafik == "Komoditas Paling Fluktuatif":
             fluktuasi = df_iph.groupby('komoditas')['harga'].std().reset_index(name='std_dev')
@@ -1120,10 +1119,16 @@ if menu == "Visualisasi IPH":
             fig.update_traces(textposition='outside')
             st.plotly_chart(fig, use_container_width=True)
             st.dataframe(fluktuasi.set_index('komoditas'), use_container_width=True)
+            share_params["th"] = df_iph['tahun'].max()
+            share_params["bl"] = 1
+            share_params["mg"] = 1
         
         elif jenis_grafik == "Indikator Perubahan Harga (%)":
             th_p = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="th_p_ind")
             k_p = st.multiselect("Pilih Komoditas", sorted(df_iph['komoditas'].unique()), default=sorted(df_iph['komoditas'].unique())[:2], key="k_p_ind")
+            share_params["th"] = th_p
+            share_params["bl"] = 1
+            share_params["mg"] = 1
             share_params["th_p"] = th_p
             share_params["kom"] = "|".join(k_p)
             if k_p:
@@ -1135,15 +1140,15 @@ if menu == "Visualisasi IPH":
                 tab_persen = ind_df.pivot_table(index='komoditas', columns='periode', values='persen_change', fill_value=0)
                 st.dataframe(tab_persen, use_container_width=True)
         
-        # --- Tampilkan link share ---
+        # --- Tampilkan link share di bagian bawah ---
+        st.markdown("---")
+        st.markdown("### 🔗 Bagikan Tampilan Ini")
         base_url = "https://dashboard-iph-kota-batu-cwg5au63betgavnrt2lmpk.streamlit.app"
-        # Gunakan urllib.parse.urlencode dengan aman
         import urllib.parse
         query_string = urllib.parse.urlencode(share_params, doseq=True)
         share_link = f"{base_url}/?{query_string}"
-        st.info("Salin link di bawah ini untuk dibagikan. Penerima akan melihat laporan yang sama tanpa login.")
+        st.info("Salin link di bawah untuk membagikan laporan ini tanpa perlu login.")
         st.code(share_link, language="text")
-        st.markdown("---")
 
 # ======================= ANALISIS IPH OTOMATIS =======================
 if menu == "Analisis IPH":
