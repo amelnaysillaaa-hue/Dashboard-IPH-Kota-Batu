@@ -989,6 +989,7 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
                     st.rerun()
 
 # ======================= VISUALISASI IPH =======================
+# ======================= VISUALISASI IPH =======================
 if menu == "Visualisasi IPH":
     st.markdown("<h1 style='text-align: center;'>📊 Visualisasi Data IPH</h1>", unsafe_allow_html=True)
     df_iph = pd.read_csv(IPH_DB)
@@ -1015,7 +1016,7 @@ if menu == "Visualisasi IPH":
             "Indikator Perubahan Harga (%)"
         ])
         
-        # Kumpulkan state untuk link share
+        # Inisialisasi share_params
         share_params = {
             "view": "shared",
             "th": tahun_share,
@@ -1028,7 +1029,6 @@ if menu == "Visualisasi IPH":
         mode = None
         kom_pilih = []
         th_pilih = []
-        # ... dan variabel lain sesuai jenis grafik
         
         if jenis_grafik == "Tren Harga (Bulanan/Mingguan)":
             mode = st.radio("Pilih Level Tampilan:", ["Bulanan (Perbandingan Tahun)", "Mingguan (Detail Harga Asli)"], horizontal=True)
@@ -1138,6 +1138,8 @@ if menu == "Visualisasi IPH":
         
         # --- Tampilkan link share ---
         base_url = "https://dashboard-iph-kota-batu-cwg5au63betgavnrt2lmpk.streamlit.app"
+        # Gunakan urllib.parse.urlencode dengan aman
+        import urllib.parse
         query_string = urllib.parse.urlencode(share_params, doseq=True)
         share_link = f"{base_url}/?{query_string}"
         st.info("Salin link di bawah ini untuk dibagikan. Penerima akan melihat laporan yang sama tanpa login.")
