@@ -1036,112 +1036,45 @@ if menu == "Visualisasi IPH":
                 col1, col2 = st.columns(2)
                 with col1:
                     kom_all = sorted(df_iph['komoditas'].unique())
-                    # Default hanya 3 komoditas pertama agar tidak terlalu penuh
-                    default_kom = kom_all[:3] if len(kom_all) >= 3 else kom_all
-                    kom_pilih = st.multiselect("Pilih Komoditas", kom_all, default=default_kom)
+                    kom_pilih = st.multiselect("Pilih Komoditas", kom_all, default=kom_all[:1] if kom_all else [])
                 with col2:
                     th_all = sorted(df_iph['tahun'].unique(), reverse=True)
-                    default_th = th_all[:1] if th_all else []  # default tahun terbaru saja
-                    th_pilih = st.multiselect("Pilih Tahun", th_all, default=default_th)
-                
+                    th_pilih = st.multiselect("Pilih Tahun", th_all, default=th_all[:3] if len(th_all) >= 3 else th_all)
                 share_params["kom"] = "|".join(kom_pilih)
                 share_params["thn"] = "|".join(map(str, th_pilih))
-                
                 if kom_pilih and th_pilih:
                     plot_df = df_iph[(df_iph['komoditas'].isin(kom_pilih)) & (df_iph['tahun'].isin(th_pilih))]
-                    if plot_df.empty:
-                        st.warning("Tidak ada data untuk pilihan ini.")
-                    else:
+                    if not plot_df.empty:
                         plot_df = plot_df.groupby(['tahun', 'bulan', 'komoditas'])['harga'].mean().reset_index()
                         plot_df['legenda'] = plot_df['tahun'].astype(str) + " - " + plot_df['komoditas']
-                        
-                        # Pivot untuk tabel
                         tab_pivot = plot_df.pivot_table(index='legenda', columns='bulan', values='harga').reset_index()
                         for b in range(1,13):
                             if b not in tab_pivot.columns:
                                 tab_pivot[b] = None
                         tab_pivot = tab_pivot[['legenda'] + list(range(1,13))]
-                        
                         def format_ribuan(x):
                             if pd.isna(x): return ""
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        
                         header_values = ['<b>Tahun / Komoditas</b>'] + [f"<b>{bulan_map[i]}</b>" for i in range(1,13)]
                         cell_values = [tab_pivot['legenda'].tolist()]
                         for b in range(1,13):
                             cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
-                        
-                        # Tinggi grafik dinamis berdasarkan jumlah item
-                        n_items = len(tab_pivot)
-                        graph_height = max(600, 400 + n_items * 20)
-                        
-                        fig = make_subplots(
-                            rows=2, cols=1,
-                            shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            row_heights=[0.6, 0.4],
-                            specs=[[{"type": "scatter"}], [{"type": "table"}]]
-                        )
-                        
+                        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05,
+                                            row_heights=[0.6, 0.4], specs=[[{"type": "scatter"}], [{"type": "table"}]])
                         for leg in tab_pivot['legenda']:
                             data_leg = plot_df[plot_df['legenda'] == leg].sort_values('bulan')
-                            fig.add_trace(
-                                go.Scatter(
-                                    x=data_leg['bulan'],
-                                    y=data_leg['harga'],
-                                    mode='lines+markers',
-                                    line=dict(width=2),
-                                    name=leg
-                                ),
-                                row=1, col=1
-                            )
-                        
-                        fig.add_trace(
-                            go.Table(
-                                header=dict(
-                                    values=header_values,
-                                    fill_color='#1e3a8a',
-                                    font=dict(color='white', size=12),
-                                    align='center'
-                                ),
-                                cells=dict(
-                                    values=cell_values,
-                                    fill_color='white',
-                                    align=['left'] + ['center']*12,
-                                    height=25
-                                )
-                            ),
-                            row=2, col=1
-                        )
-                        
-                        fig.update_layout(
-                            title="<b>Tren Harga Rata-rata Bulanan</b>",
-                            height=graph_height,
-                            margin=dict(l=20, r=150, t=60, b=80),  # margin kanan untuk legend
-                            plot_bgcolor='white',
-                            showlegend=True,
-                            legend=dict(
-                                orientation="v",
-                                yanchor="top",
-                                y=1.0,
-                                xanchor="left",
-                                x=1.02,
-                                bgcolor="rgba(255,255,255,0.8)",
-                                bordercolor="lightgray",
-                                borderwidth=1
-                            )
-                        )
-                        
-                        fig.update_xaxes(
-                            tickmode='array',
-                            tickvals=list(range(1, 13)),
-                            ticktext=list(bulan_map.values()),
-                            showgrid=True,
-                            gridcolor='lightgray',
-                            row=1, col=1
-                        )
+                            fig.add_trace(go.Scatter(x=data_leg['bulan'], y=data_leg['harga'],
+                                                     mode='lines+markers', line=dict(width=3), name=leg), row=1, col=1)
+                        fig.add_trace(go.Table(header=dict(values=header_values, fill_color='#1e3a8a',
+                                                           font=dict(color='white', size=12), align='center'),
+                                               cells=dict(values=cell_values, fill_color='white',
+                                                          align=['left'] + ['center']*12, height=25)), row=2, col=1)
+                        fig.update_layout(title="<b>Tren Harga Rata-rata Bulanan</b>", height=750,
+                                          margin=dict(l=20, r=20, t=60, b=80), plot_bgcolor='white',
+                                          legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
+                        fig.update_xaxes(tickmode='array', tickvals=list(range(1,13)), ticktext=list(bulan_map.values()),
+                                         showgrid=True, gridcolor='lightgray', row=1, col=1)
                         fig.update_yaxes(title="Harga (Rp)", showgrid=True, gridcolor='lightgray', row=1, col=1)
-                        
                         st.plotly_chart(fig, use_container_width=True)
             else:  # Mingguan
                 col1, col2, col3 = st.columns(3)
