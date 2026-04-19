@@ -947,16 +947,15 @@ if menu == "Visualisasi IPH":
         with col_share3:
             minggu_share = st.selectbox("Minggu ke-", sorted(df_iph[(df_iph['tahun']==tahun_share) & (df_iph['bulan']==bulan_share)]['minggu_ke'].unique()), key="share_minggu_vis")
         
-        try:
-            base_url = st.get_option("browser.serverAddress") or "http://localhost:8501"
-            if base_url.startswith("0.0.0.0"):
-                base_url = "http://localhost:8501"
-        except:
-            base_url = "http://localhost:8501"
-        share_link = f"{base_url}/?view=shared&tahun={tahun_share}&bulan={bulan_share}&minggu={minggu_share}"
+        base_url = "https://dashboard-iph-kota-batu-cwg5au63betgavnrt2lmpk.streamlit.app"
+        
+        # Pastikan nama parameter (th, bl, mg) sama dengan yang kamu pakai di logika 'Shared View' paling bawah
+        share_link = f"{base_url}/?view=shared&th={tahun_share}&bl={bulan_share}&mg={minggu_share}"
+        
         st.info("Salin link di bawah ini untuk dibagikan. Penerima bisa langsung melihat grafik tanpa login.")
         st.code(share_link, language="text")
         st.markdown("---")
+
         # ======================= AKHIR BAGIAN SHARE LINK =======================
 
         jenis_grafik = st.selectbox("Pilih Jenis Analisis Grafik:", [
