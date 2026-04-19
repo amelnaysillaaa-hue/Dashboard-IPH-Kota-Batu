@@ -89,6 +89,78 @@ st.markdown("""
             font-weight: 600;
             font-size: 1rem;
         }
+        /* === SIDEBAR TEMA BPS (BIRU + ORANGE + HIJAU) === */
+        [data-testid="stSidebar"] {
+            background: linear-gradient(180deg, #0A1E3F 0%, #112B4F 100%);
+            border-right: 1px solid #2D4A6E;
+        }
+        [data-testid="stSidebar"] * {
+            color: #F8FAFC !important;
+        }
+        [data-testid="stSidebar"] .stButton > button {
+            background-color: transparent;
+            color: #E2E8F0 !important;
+            border: none;
+            border-radius: 8px;
+            padding: 0.6rem 1rem;
+            text-align: left;
+            font-weight: 500;
+            width: 100%;
+            transition: 0.2s;
+            margin-bottom: 2px;
+        }
+        [data-testid="stSidebar"] input,
+        [data-testid="stSidebar"] select,
+        [data-testid="stSidebar"] textarea {
+            color: #1e293b !important;
+            background-color: white !important;
+        }
+        /* Menu aktif */
+        .active-menu-btn {
+            background-color: #1E3A8A !important;
+            border-left: 4px solid #F97316 !important;
+            color: white !important;
+        }
+        /* Grup judul */
+        .sidebar-section-title {
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #F97316 !important;
+            margin-top: 1.8rem;
+            margin-bottom: 0.5rem;
+            padding-left: 0.5rem;
+            font-weight: 600;
+        }
+        /* Logo area */
+        .sidebar-logo-area {
+            text-align: center;
+            margin-bottom: 1.2rem;
+            padding-bottom: 1.2rem;
+            border-bottom: 1px solid #F97316;
+        }
+        /* Avatar user */
+        .sidebar-user-avatar {
+            background: #F97316;
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 1.2rem;
+        }
+        /* Notifikasi badge */
+        .notif-badge {
+            background: #EF4444;
+            color: white;
+            border-radius: 20px;
+            padding: 4px 8px;
+            font-size: 0.7rem;
+            margin-left: 8px;
+        }
     </style>
 """, unsafe_allow_html=True)
 
@@ -316,6 +388,92 @@ elif 'logged_in' not in st.session_state:
 
 # ======================= HALAMAN LOGIN =======================
 if not st.session_state.logged_in:
+    # --- Tambahan CSS untuk tema BPS (hanya warna, tidak ubah struktur) ---
+    st.markdown("""
+        <style>
+            .stApp {
+                background: linear-gradient(135deg, #0A1E3F 0%, #112B4F 100%) !important;
+            }
+            [data-testid="stSidebar"] {
+                display: none;
+            }
+            h1 {
+                color: #F8FAFC !important;
+            }
+            p, .stCaption {
+                color: #CBD5E1 !important;
+            }
+            /* Container tab */
+            .stTabs [data-baseweb="tab-list"] {
+                background: transparent;
+                gap: 8px;
+            }
+            /* Semua tab (non-aktif & aktif) berlatar biru */
+            .stTabs button[data-baseweb="tab"] {
+                background: #0F2A4A !important;      /* biru gelap */
+                color: #FFFFFF !important;
+                font-weight: 600;
+                padding: 0.5rem 1.5rem;
+                border-radius: 30px;
+                border: none !important;
+                box-shadow: none !important;
+            }
+            /* Hover tab non-aktif */
+            .stTabs button[data-baseweb="tab"]:hover {
+                background: #1E3A8A !important;
+            }
+            /* Tab aktif */
+            .stTabs button[data-baseweb="tab"][aria-selected="true"] {
+                background: #1E3A8A !important;
+                color: #FFFFFF !important;
+                font-weight: 700;
+                border-bottom: 3px solid #F97316 !important;
+            }
+            /* Label form */
+            .stTextInput label, .stSelectbox label {
+                color: #F8FAFC !important;
+            }
+            /* Input field */
+            .stTextInput > div > div > input,
+            .stSelectbox > div > div {
+                background: rgba(255, 255, 255, 0.95) !important;
+                border: 1px solid #3B82F6 !important;
+                color: #0F172A !important;
+                border-radius: 12px !important;
+            }
+            ::placeholder {
+                color: #64748B !important;
+            }
+            /* Tombol utama */
+            div.stButton > button:first-child {
+                background: linear-gradient(90deg, #1E3A8A 0%, #2563EB 100%) !important;
+                color: white !important;
+                border: none !important;
+                border-radius: 30px !important;
+                font-weight: 600 !important;
+            }
+            div.stButton > button:first-child:hover {
+                background: #F97316 !important;
+            }
+            /* Tombol outline (Lihat Publik) */
+            div.stButton > button[kind="secondary"] {
+                background: transparent !important;
+                border: 1.5px solid #F97316 !important;
+                color: #F97316 !important;
+            }
+            div.stButton > button[kind="secondary"]:hover {
+                background: #F97316 !important;
+                color: white !important;
+            }
+            /* Info box register */
+            .stAlert {
+                background: rgba(30, 58, 138, 0.3) !important;
+                color: #E2E8F0 !important;
+                border-left-color: #F97316 !important;
+            }
+        </style>
+    """, unsafe_allow_html=True)
+
     def get_base64(bin_file):
         try:
             with open(bin_file, 'rb') as f:
@@ -351,7 +509,7 @@ if not st.session_state.logged_in:
             </p>
         """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
-        
+       
         tab_login, tab_register = st.tabs(["🔑 Login", "📝 Register"])
         with tab_login:
             with st.form("login_form"):
@@ -599,83 +757,152 @@ if st.session_state.user_role == "Publik_Shared":
     st.caption(f"Laporan diakses pada {datetime.now().strftime('%d %B %Y, %H:%M')} WIB")
     st.stop()
 
-# ======================= SIDEBAR =======================
-def get_base64_sidebar(bin_file):
+def render_sidebar():
+    # --- INISIALISASI current_menu (HARUS PALING AWAL) ---
+    if 'current_menu' not in st.session_state:
+        st.session_state.current_menu = "Beranda"
+    
+    # Logo BPS
+    file_name = "Logo-Badan-Pusat-Statistik-BPS.png"
+    bin_str = None
     try:
-        with open(bin_file, 'rb') as f:
-            data = f.read()
-        return base64.b64encode(data).decode()
+        with open(file_name, 'rb') as f:
+            bin_str = base64.b64encode(f.read()).decode()
     except:
-        return None
+        pass
 
-file_name = "Logo-Badan-Pusat-Statistik-BPS.png"
-bin_str = get_base64_sidebar(file_name)
-if bin_str:
-    logo_html_sidebar = f'<div style="display: flex; justify-content: center; margin-bottom: 20px; margin-top: 10px;"><img src="data:image/png;base64,{bin_str}" width="120"></div>'
-else:
-    logo_html_sidebar = '<div style="text-align: center; margin-bottom: 20px;">Logo BPS tidak tersedia</div>'
+    st.sidebar.markdown(
+        f"""
+        <div class="sidebar-logo-area">
+            {f'<img src="data:image/png;base64,{bin_str}" width="100">' if bin_str else '<span style="font-size:28px;">📊</span>'}
+            <h3 style="color:#F8FAFC; margin:0.5rem 0 0 0;">IPH Kota Batu</h3>
+            <p style="color:#94A3B8; font-size:0.8rem; margin:0;">Tim Pengendalian Inflasi Daerah</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-st.sidebar.markdown(logo_html_sidebar, unsafe_allow_html=True)
-st.sidebar.markdown(f"<div style='text-align:center;'><strong>{st.session_state.username}</strong><br><span style='background:#e2e8f0; padding:2px 8px; border-radius:20px;'>{st.session_state.user_role}</span></div>", unsafe_allow_html=True)
-st.sidebar.markdown("---")
+    # Info Pengguna
+    inisial = st.session_state.username[0].upper() if st.session_state.username else "?"
+    st.sidebar.markdown(
+        f"""
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:1.5rem; padding:0.5rem; background:#1E3A8A; border-radius:12px;">
+            <div class="sidebar-user-avatar">{inisial}</div>
+            <div>
+                <strong style="color:#F8FAFC;">{st.session_state.username}</strong><br>
+                <span style="font-size:0.75rem; color:#94A3B8;">{st.session_state.user_role}</span>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
-# Notifikasi untuk pegawai
-if st.session_state.user_role == "Pegawai":
-    notif_df = get_notifikasi(st.session_state.username)
-    notif_belum = notif_df[notif_df['dibaca'] == False]
-    if len(notif_belum) > 0:
-        st.sidebar.markdown(f"<div style='background:#fee2e2; padding:10px; border-radius:12px;'><span>🔔 Notifikasi <span style='background:#ef4444; color:white; border-radius:50px; padding:0 6px;'>{len(notif_belum)}</span></span></div>", unsafe_allow_html=True)
-        for _, notif in notif_belum.iterrows():
-            st.sidebar.markdown(f"- {notif['pesan']} <br><small>{notif['tanggal']}</small>", unsafe_allow_html=True)
-            if st.sidebar.button(f"Tandai baca", key=f"baca_{notif['id_rapat']}"):
-                tandai_baca(notif['id_rapat'], st.session_state.username)
+    # Notifikasi (hanya untuk Pegawai) - DIBUNGKUS TRY-EXCEPT
+    if st.session_state.user_role == "Pegawai":
+        try:
+            notif_df = get_notifikasi(st.session_state.username)
+            notif_belum = notif_df[notif_df['dibaca'] == False]
+            if len(notif_belum) > 0:
+                st.sidebar.markdown(
+                    f"""
+                    <div style="background:#7F1D1D; padding:8px 12px; border-radius:8px; margin-bottom:0.5rem;">
+                        <span style="font-size:1.2rem; margin-right:8px;">🔔</span>
+                        <span>Anda memiliki <span class="notif-badge">{len(notif_belum)}</span> tugas baru</span>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                for i, (_, notif) in enumerate(notif_belum.head(3).iterrows()):
+                    col1, col2 = st.sidebar.columns([4, 1])
+                    with col1:
+                        pesan_singkat = notif['pesan'][:35] + "..." if len(notif['pesan']) > 35 else notif['pesan']
+                        st.markdown(f"<small style='color:#CBD5E1;'>{pesan_singkat}</small>", unsafe_allow_html=True)
+                    with col2:
+                        if st.button("✔️", key=f"baca_{notif['id_rapat']}_{i}", help="Tandai sudah dibaca"):
+                            tandai_baca(notif['id_rapat'], st.session_state.username)
+                            st.rerun()
+        except Exception as e:
+            # Jika notifikasi gagal, jangan hentikan sidebar
+            pass
+
+    # === FUNGSI TOMBOL MENU ===
+    def menu_button(label, key, icon=""):
+        current = st.session_state.get("current_menu", "Beranda")
+        is_active = (current == label)
+        if is_active:
+            st.sidebar.markdown(
+                f"""
+                <div style="background:#1E3A8A; border-left:4px solid #F97316; padding:0.6rem 1rem; border-radius:8px; margin-bottom:2px; color:white !important; font-weight:500;">
+                    {icon} {label}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            if st.sidebar.button(f"{icon} {label}", key=key, use_container_width=True):
+                st.session_state.current_menu = label
                 st.rerun()
-    else:
-        st.sidebar.markdown("Tidak ada notifikasi baru")
-    st.sidebar.markdown("---")
 
-# Menu berdasarkan role
-if st.session_state.user_role == "Admin":
-    menu = st.sidebar.radio("Navigasi", ["Beranda", "Kelola Rapat", "Input Rekap IPH", "Rekapan IPH", "Visualisasi IPH", "Analisis IPH", "Monitoring Resume"])
-elif st.session_state.user_role == "Pegawai":
-    menu = st.sidebar.radio("Navigasi", ["Beranda", "Isi Resume Rapat", "Input Rekap IPH", "Rekapan IPH", "Visualisasi IPH", "Analisis IPH"])
-elif st.session_state.user_role == "Publik_Shared":
-    # Tidak akan pernah tercapai karena sudah di-stop di atas
-    menu = None
-else:
-    menu = st.sidebar.radio("Navigasi", ["Beranda", "Visualisasi IPH", "Lihat Rapat"])
+    # === FUNGSI TOMBOL MENU ===
+    def menu_button(label, key, icon=""):
+        current = st.session_state.get("current_menu", "Beranda")
+        is_active = (current == label)
+        if is_active:
+            st.sidebar.markdown(
+                f"""
+                <div style="background:#1E3A8A; border-left:4px solid #F97316; padding:0.6rem 1rem; border-radius:8px; margin-bottom:2px; color:white !important; font-weight:500;">
+                    {icon} {label}
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        else:
+            if st.sidebar.button(f"{icon} {label}", key=key, use_container_width=True):
+                st.session_state.current_menu = label
+                st.rerun()
 
-if st.session_state.user_role != "Publik_Shared":
-    if st.sidebar.button("Logout", use_container_width=True):
-        st.session_state.logged_in = False
-        st.session_state.user_role = None
-        st.query_params.clear()
-        st.rerun()
+    # === MENU UTAMA ===
+    st.sidebar.markdown('<div class="sidebar-section-title">📌 MENU UTAMA</div>', unsafe_allow_html=True)
+    menu_button("Beranda", "nav_beranda", "🏠")
+    
+    if st.session_state.user_role == "Admin":
+        menu_button("Kelola Rapat", "nav_kelola_rapat", "📅")
+        menu_button("Monitoring Resume", "nav_monitoring", "📋")
+        menu_button("Input Rekap IPH", "nav_input_iph", "📊")
+    
+    if st.session_state.user_role == "Pegawai":
+        menu_button("Isi Resume Rapat", "nav_isi_resume", "✏️")
+        menu_button("Input Rekap IPH", "nav_input_iph", "📊")
+    
+    menu_button("Rekapan IPH", "nav_rekapan", "📑")
+    
+    # === VISUALISASI & ANALISIS ===
+    st.sidebar.markdown('<div class="sidebar-section-title">📈 VISUALISASI & ANALISIS</div>', unsafe_allow_html=True)
+    if st.session_state.user_role in ["Admin", "Pegawai", "Publik"]:
+        menu_button("Visualisasi IPH", "nav_visualisasi", "📊")
+        menu_button("Analisis IPH", "nav_analisis", "🔍")
+    if st.session_state.user_role == "Publik":
+        menu_button("Lihat Rapat", "nav_lihat_rapat", "👀")
 
-# --- FUNGSI FORM ISI RESUME (untuk admin, tidak dipakai pegawai) ---
-def form_isi_resume(rapat_row, is_admin=False):
-    if not is_admin:
-        daftar_pegawai = [p.strip() for p in rapat_row['pegawai'].split(" || ")] if pd.notna(rapat_row['pegawai']) else []
-        if st.session_state.username not in daftar_pegawai:
-            st.warning("Anda tidak ditugaskan untuk mengisi resume rapat ini.")
-            return
-    with st.form(f"form_resume_{rapat_row['id']}"):
-        ringkasan = st.text_area("Ringkasan awal dari tabel indikator", value=rapat_row['ringkasan_indikator'] if pd.notna(rapat_row['ringkasan_indikator']) else "", height=100)
-        resume = st.text_area("Resume Hasil Rapat", value=rapat_row['resume'] if pd.notna(rapat_row['resume']) else "", height=150)
-        action = st.text_area("Action Items (Tindak Lanjut)", value=rapat_row['action_items'] if pd.notna(rapat_row['action_items']) else "", height=100)
-        status = st.selectbox("Status", ["Belum Diisi", "Proses", "Selesai"], index=["Belum Diisi", "Proses", "Selesai"].index(rapat_row['status'] if pd.notna(rapat_row['status']) else "Belum Diisi"))
-        submitted = st.form_submit_button("Simpan Resume")
-        if submitted:
-            df = pd.read_csv(RAPAT_DB)
-            idx = df[df['id'] == rapat_row['id']].index[0]
-            df.at[idx, 'ringkasan_indikator'] = ringkasan
-            df.at[idx, 'resume'] = resume
-            df.at[idx, 'action_items'] = action
-            df.at[idx, 'status'] = status
-            df.at[idx, 'last_editor'] = st.session_state.username
-            df.to_csv(RAPAT_DB, index=False)
-            st.success("Resume berhasil disimpan!")
+    st.sidebar.markdown("<hr style='margin:1.5rem 0; border-color:#2D4A6E;'>", unsafe_allow_html=True)
+
+    # === LOGOUT ===
+    if st.session_state.user_role != "Publik_Shared":
+        if st.sidebar.button("🚪 Keluar", use_container_width=True):
+            for key in ['logged_in', 'user_role', 'username', 'current_menu']:
+                if key in st.session_state:
+                    del st.session_state[key]
             st.rerun()
+
+    # Inisialisasi current_menu jika belum ada
+    if 'current_menu' not in st.session_state:
+        st.session_state.current_menu = "Beranda"
+
+# Panggil fungsi sidebar
+render_sidebar()
+
+# Variabel menu diambil dari session state
+menu = st.session_state.current_menu
 
 # ======================= BERANDA =======================
 if menu == "Beranda":
