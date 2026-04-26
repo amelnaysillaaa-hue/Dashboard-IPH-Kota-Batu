@@ -1,4 +1,5 @@
 import streamlit as st
+import requests 
 import pandas as pd
 import os
 import hashlib
@@ -8,6 +9,11 @@ import base64
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
+from io import BytesIO 
+from fpdf import FPDF
+import tempfile
+import urllib.request
+import re
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -20,170 +26,230 @@ st.set_page_config(
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
+        /* === GLOBAL === */
         * {
             font-family: 'Lexend', sans-serif;
         }
         .stApp {
-            background: linear-gradient(135deg, #f0f4f8 0%, #e6edf4 100%);
+            background: linear-gradient(145deg, #F1F5F9 0%, #E2E8F0 100%);
         }
+        
+        /* === SIDEBAR ELEGAN === */
         [data-testid="stSidebar"] {
-            background: #ffffff;
-            border-right: 1px solid #e0e7ed;
-        }
-        .main-header {
-            background: linear-gradient(90deg, #1e3a8a 0%, #2563eb 100%);
-            padding: 1.2rem;
-            border-radius: 20px;
-            color: white;
-            margin-bottom: 2rem;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        .main-header h1 {
-            color: white;
-            margin: 0;
-            font-size: 1.8rem;
-        }
-        .main-header p {
-            margin: 0;
-            opacity: 0.9;
-        }
-        .metric-card {
-            background: white;
-            border-radius: 16px;
-            padding: 1rem;
-            text-align: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-            border-top: 4px solid #10b981;
-        }
-        .metric-card h3 {
-            font-size: 1rem;
-            margin-bottom: 0.25rem;
-        }
-        .metric-card p {
-            font-size: 0.8rem;
-        }
-        .metric-card p:first-of-type {
-            font-size: 1.5rem;
-            font-weight: 600;
-            margin: 0.2rem 0;
-        }    
-        .stButton > button {
-            background: #1e3a8a;
-            color: white;
-            border-radius: 30px;
-            font-weight: 500;
-            transition: 0.2s;
-        }
-        .stButton > button:hover {
-            background: #2563eb;
-            transform: translateY(-2px);
-        }
-        h1, h2, h3 {
-            color: #1e293b;
-        }
-        .stTabs [data-baseweb="tab-list"] {
-            gap: 24px;
-            justify-content: center;
-        }
-        .stTabs [data-baseweb="tab"] {
-            font-weight: 600;
-            font-size: 1rem;
-        }
-        /* === SIDEBAR TEMA BPS (BIRU + ORANGE + HIJAU) === */
-        [data-testid="stSidebar"] {
-            background: linear-gradient(180deg, #0A1E3F 0%, #112B4F 100%);
-            border-right: 1px solid #2D4A6E;
+            background: linear-gradient(180deg, #1E2A3A 0%, #0F1722 100%);
+            border-right: none;
+            box-shadow: 4px 0 20px rgba(0,0,0,0.08);
         }
         [data-testid="stSidebar"] * {
-            color: #F8FAFC !important;
+            color: #F1F5F9 !important;
         }
         [data-testid="stSidebar"] .stButton > button {
-            background-color: transparent;
-            color: #E2E8F0 !important;
+            background: rgba(255, 255, 255, 0.05);
             border: none;
-            border-radius: 8px;
-            padding: 0.6rem 1rem;
+            border-radius: 12px;
             text-align: left;
             font-weight: 500;
             width: 100%;
-            transition: 0.2s;
-            margin-bottom: 2px;
+            margin-bottom: 6px;
+            transition: all 0.25s ease;
+            backdrop-filter: blur(4px);
         }
-        [data-testid="stSidebar"] input,
-        [data-testid="stSidebar"] select,
-        [data-testid="stSidebar"] textarea {
-            color: #1e293b !important;
-            background-color: white !important;
+        [data-testid="stSidebar"] .stButton > button:hover {
+            background: rgba(249, 115, 22, 0.2);
+            transform: translateX(6px);
+            border-left: 2px solid #F97316;
         }
-        /* Menu aktif */
-        .active-menu-btn {
-            background-color: #1E3A8A !important;
-            border-left: 4px solid #F97316 !important;
-            color: white !important;
-        }
-        /* Grup judul */
-        .sidebar-section-title {
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            color: #F97316 !important;
-            margin-top: 1.8rem;
-            margin-bottom: 0.5rem;
-            padding-left: 0.5rem;
-            font-weight: 600;
-        }
-        /* Logo area */
         .sidebar-logo-area {
             text-align: center;
-            margin-bottom: 1.2rem;
+            margin-bottom: 1.8rem;
             padding-bottom: 1.2rem;
-            border-bottom: 1px solid #F97316;
+            border-bottom: 1px solid rgba(255, 193, 7, 0.3);
         }
-        /* Avatar user */
         .sidebar-user-avatar {
-            background: #F97316;
-            width: 42px;
-            height: 42px;
+            background: linear-gradient(135deg, #F97316, #F59E0B);
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             display: flex;
             align-items: center;
             justify-content: center;
             color: white;
             font-weight: bold;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
         }
-        /* Notifikasi badge */
+        .sidebar-section-title {
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #F59E0B !important;
+            margin-top: 1.8rem;
+            margin-bottom: 0.8rem;
+            font-weight: 600;
+        }
         .notif-badge {
             background: #EF4444;
             color: white;
-            border-radius: 20px;
-            padding: 4px 8px;
+            border-radius: 30px;
+            padding: 2px 8px;
             font-size: 0.7rem;
             margin-left: 8px;
         }
+        
+        /* === HEADER UTAMA === */
+        .main-header {
+            background: linear-gradient(105deg, #D35400 0%, #F39C12 100%);
+            padding: 1.8rem;
+            border-radius: 28px;
+            color: white;
+            margin-bottom: 2rem;
+            box-shadow: 0 12px 24px -8px rgba(0,0,0,0.15);
+            transition: all 0.3s ease;
+        }
+        .main-header h1 {
+            color: white;
+            margin: 0;
+            font-size: 2rem;
+            font-weight: 600;
+        }
+        .main-header p {
+            margin: 0;
+            opacity: 0.9;
+            font-size: 0.95rem;
+        }
+        
+        /* === CARD METRIK (GLASSMORPHISM) === */
+        .metric-card {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            border-radius: 24px;
+            padding: 1rem;
+            text-align: center;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.05);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            transition: all 0.3s ease;
+        }
+        .metric-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 16px 28px -8px rgba(0,0,0,0.12);
+            background: rgba(255, 255, 255, 0.9);
+        }
+        .metric-card h3 {
+            color: #475569;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .metric-card p:first-of-type {
+            font-size: 2.2rem;
+            font-weight: 700;
+            color: #1E293B;
+            margin: 0.2rem 0 0 0;
+        }
+        
+        /* === TOMBOL === */
+        .stButton > button {
+            background: linear-gradient(90deg, #F97316, #EA580C);
+            color: white;
+            border: none;
+            border-radius: 40px;
+            font-weight: 600;
+            padding: 0.6rem 1.2rem;
+            transition: all 0.25s ease;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        .stButton > button:hover {
+            background: linear-gradient(90deg, #EA580C, #C2410C);
+            transform: scale(1.02);
+            box-shadow: 0 6px 14px rgba(0,0,0,0.15);
+        }
+        
+        /* === TAB === */
+        .stTabs [data-baseweb="tab-list"] {
+            gap: 12px;
+            background: white;
+            padding: 6px 12px;
+            border-radius: 60px;
+            display: inline-flex;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .stTabs [data-baseweb="tab"] {
+            font-weight: 600;
+            padding: 8px 20px;
+            border-radius: 40px;
+            color: #475569;
+            transition: all 0.2s;
+        }
+        .stTabs [data-baseweb="tab"][aria-selected="true"] {
+            background: #F97316;
+            color: white !important;
+        }
+        
+        /* === DATAFRAME === */
+        .stDataFrame {
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+        
+        /* === INPUT FIELD === */
+        .stTextInput > div > div > input, 
+        .stSelectbox > div > div, 
+        .stNumberInput > div > div > input {
+            border-radius: 16px;
+            border: 1px solid #E2E8F0;
+            transition: all 0.2s;
+        }
+        .stTextInput > div > div > input:focus {
+            border-color: #F97316;
+            box-shadow: 0 0 0 2px rgba(249,115,22,0.2);
+        }
+        
+        /* === EXPANDER === */
+        .streamlit-expanderHeader {
+            background: white;
+            border-radius: 20px;
+            border: none;
+            padding: 0.8rem 1.2rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+        .streamlit-expanderContent {
+            background: white;
+            border-radius: 0 0 20px 20px;
+            padding: 1rem;
+        }
+        
+        /* === PLOTLY CHART === */
+        .js-plotly-plot .plotly .main-svg {
+            border-radius: 24px;
+            background: white;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        }
+        
+        /* === TOMBOL HAPUS === */
+        .stButton > button[kind="secondary"] {
+            background: #EF4444;
+            background: linear-gradient(90deg, #EF4444, #DC2626);
+        }
+        .stButton > button[kind="secondary"]:hover {
+            background: #DC2626;
+        }
+        
+        /* === INFO, SUCCESS, ERROR === */
+        .stAlert {
+            border-radius: 20px;
+            border-left: 6px solid #F97316;
+            background: white;
+        }
+        
+        /* === TOAST === */
+        .stToast {
+            border-radius: 20px;
+            background: white;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
     </style>
 """, unsafe_allow_html=True)
-
-# --- DAFTAR PEGAWAI ---
-DAFTAR_PEGAWAI = [
-    "Ir. Yuniarni Erry Wahyuti, MM",
-    "Adam Mahmud, SE, MM",
-    "Gatot Suharmoko, M.Si.",
-    "Muhammad Arief Nurohman, S.Si",
-    "Sayu Made Widiari, S.ST, M.Si",
-    "Eka Cahyani, S.ST",
-    "Dwi Esti Kurniasih, S.Si, M.AP, M.P.P.",
-    "Arif Nugroho Wicaksono, S.Si",
-    "FX Gugus Febri Putranto, SST, M.E.",
-    "Sulistyono, SE",
-    "Adina Astasia, S.ST, M.Stat",
-    "Eko Wibowo, SE",
-    "Singgih Wicaksono, SE",
-    "Nurlaila Oktarahmayanti, S.ST",
-    "Dhika Devara Prihastiono, S.ST",
-    "Mulia Estiwilaras, SM",
-    "Wahyu Mega Alfazip, A.Md.Kb.N.",
-]
 
 # --- FUNGSI HASH PASSWORD ---
 def hash_password(password):
@@ -232,6 +298,11 @@ if not os.path.exists(RAPAT_DB):
     ])
     df_rapat.to_csv(RAPAT_DB, index=False)
 
+df_rapat_check = pd.read_csv(RAPAT_DB)
+if 'gambar_dokumentasi' not in df_rapat_check.columns:
+    df_rapat_check['gambar_dokumentasi'] = ''
+    df_rapat_check.to_csv(RAPAT_DB, index=False)
+
 if not os.path.exists(IPH_DB):
     df_iph = pd.DataFrame(columns=[
         "tahun", "bulan", "minggu_ke", "komoditas", "harga", "persen_change", "last_updated"
@@ -241,6 +312,35 @@ if not os.path.exists(IPH_DB):
 if not os.path.exists(NOTIF_DB):
     df_notif = pd.DataFrame(columns=["id_rapat", "pegawai", "pesan", "dibaca", "tanggal"])
     df_notif.to_csv(NOTIF_DB, index=False)
+
+# --- INISIALISASI DAFTAR PEGAWAI (DINAMIS) ---
+PEGAWAI_DB = "daftar_pegawai.csv"
+DEFAULT_PEGAWAI_LIST = [
+    "Ir. Yuniarni Erry Wahyuti",
+    "Adam Mahmud",
+    "Gatot Suharmoko",
+    "Muhammad Arief Nurohman",
+    "Sayu Made Widiari",
+    "Eka Cahyani",
+    "Dwi Esti Kurniasih",
+    "Arif Nugroho Wicaksono",
+    "FX Gugus Febri Putranto",
+    "Sulistyono",
+    "Adina Astasia",
+    "Eko Wibowo",
+    "Singgih Wicaksono",
+    "Nurlaila Oktarahmayanti",
+    "Dhika Devara Prihastiono",
+    "Mulia Estiwilaras",
+    "Wahyu Mega Alfazip",
+]
+if not os.path.exists(PEGAWAI_DB):
+    pd.DataFrame(DEFAULT_PEGAWAI_LIST, columns=["nama"]).to_csv(PEGAWAI_DB, index=False)
+
+def load_pegawai():
+    return pd.read_csv(PEGAWAI_DB)['nama'].tolist()
+
+DAFTAR_PEGAWAI = load_pegawai()
 
 # --- FUNGSI BANTU ---
 def get_minggu_dari_tanggal(tanggal):
@@ -261,56 +361,54 @@ def get_previous_price(tahun, bulan, minggu_ke, komoditas):
         return prev_data.iloc[0]['harga']
     return None
 
-def generate_ringkasan_indikator(tahun, bulan, minggu_ke, df_iph):
-    data_periode = df_iph[(df_iph['tahun']==tahun) & (df_iph['bulan']==bulan) & (df_iph['minggu_ke']==minggu_ke)]
+def generate_ringkasan_indikator(tahun, bulan, minggu_ke):
+    analisis_file = "iph_analisis.csv"
+    if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
+        return "Data ringkasan IPH belum tersedia."
+    
+    df = pd.read_csv(analisis_file)
+    data_periode = df[(df['tahun'] == tahun) & (df['bulan'] == bulan) & (df['minggu_ke'] == minggu_ke)]
+    
     if data_periode.empty:
-        return "Data tidak tersedia untuk periode ini."
-    prev_tahun = tahun
-    prev_bulan = bulan
-    prev_minggu = minggu_ke - 1
-    if prev_minggu < 1:
-        if prev_bulan > 1:
-            prev_bulan -= 1
-            data_prev_bulan = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan)]
-            if not data_prev_bulan.empty:
-                prev_minggu = data_prev_bulan['minggu_ke'].max()
-            else:
-                prev_minggu = None
-        else:
-            prev_tahun -= 1
-            prev_bulan = 12
-            data_prev_bulan = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan)]
-            if not data_prev_bulan.empty:
-                prev_minggu = data_prev_bulan['minggu_ke'].max()
-            else:
-                prev_minggu = None
-    if prev_minggu is None:
-        return "Data minggu sebelumnya tidak tersedia."
-    data_prev = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan) & (df_iph['minggu_ke']==prev_minggu)]
-    if data_prev.empty:
-        return f"Data minggu sebelumnya (minggu ke-{prev_minggu} {prev_bulan}/{prev_tahun}) tidak tersedia."
-    merged = data_periode.merge(data_prev[['komoditas','harga']], on='komoditas', suffixes=('', '_prev'))
-    merged['perubahan'] = ((merged['harga'] - merged['harga_prev']) / merged['harga_prev']) * 100
-    rata_perubahan = merged['perubahan'].mean()
-    if rata_perubahan >= 0:
+        return f"Data untuk minggu ke-{minggu_ke} bulan {bulan} tahun {tahun} belum tersedia."
+    
+    row = data_periode.iloc[0]
+    
+    # Format angka sesuai input asli (tidak dibatasi 2 desimal)
+    def format_original(value):
+        if isinstance(value, (int, float)):
+            s = f"{value:.10f}"
+            s = s.rstrip('0').rstrip('.')
+            return s
+        return value
+    
+    indikator = row['indikator']
+    if indikator > 0:
         jenis = "inflasi"
-        top3 = merged.nlargest(3, 'perubahan')[['komoditas', 'perubahan']]
-    else:
+    elif indikator < 0:
         jenis = "deflasi"
-        top3 = merged.nsmallest(3, 'perubahan')[['komoditas', 'perubahan']]
-    def format_angka(x, desimal=4):
-        return f"{x:.{desimal}f}".replace('.', ',')
-    rata_str = format_angka(rata_perubahan, 2)
-    def format_komoditas(kom):
-        return kom.title()
-    andil_list = []
-    for i, (_, row) in enumerate(top3.iterrows(), 1):
-        kom = format_komoditas(row['komoditas'])
-        perubahan = row['perubahan']
-        andil_list.append(f"{i}. {kom} ({format_angka(perubahan, 4)}), ")
-    andil_str = "\n".join(andil_list)
+    else:
+        jenis = "stabil"
+    
+    kom_list = row['komoditas_andil'].split("|")
+    nilai_list = [float(x) if x.strip() else 0.0 for x in row['nilai_andil'].split("|")]
+    
+    andil_lines = []
+    for i, (kom, nil) in enumerate(zip(kom_list, nilai_list), start=1):
+        andil_lines.append(f"{i}. {kom.title()} ({format_original(nil)}%)")
+    andil_str = "\n".join(andil_lines)
+    
+    fluk_kom = row['fluktuasi_komoditas']
+    fluk_nilai = row['fluktuasi_nilai']
+    
     bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][bulan-1]
-    ringkasan = f"Berikut kami sampaikan IPH Kota Batu minggu ke-{minggu_ke} {bulan_nama} {tahun}. Kota Batu mengalami {jenis} sebesar {rata_str}\n\nBerikut adalah komoditi yg menyumbang andil terbesar\n{andil_str}"
+    
+    ringkasan = (
+        f"Berikut kami sampaikan IPH Kota Batu minggu ke-{minggu_ke} {bulan_nama} {tahun}.\n"
+        f"Kota Batu mengalami {jenis} sebesar {format_original(indikator)}%\n\n"
+        f"Komoditas penyumbang andil terbesar:\n{andil_str}\n"
+        f"Fluktuasi harga tertinggi terjadi pada {fluk_kom.title()} dengan perubahan {format_original(fluk_nilai)}%."
+    )
     return ringkasan
 
 def update_persen_change():
@@ -351,7 +449,34 @@ def add_komoditas(nama_baru):
         return True
     return False
 
-# --- FUNGSI NOTIFIKASI ---
+def delete_komoditas(nama):
+    df = pd.read_csv(KOMODITAS_DB)
+    df = df[df['komoditas'] != nama]
+    df.to_csv(KOMODITAS_DB, index=False)
+
+def tambah_pegawai(nama_baru):
+    df = pd.read_csv(PEGAWAI_DB)
+    nama_baru = nama_baru.strip()
+    if not nama_baru:
+        return False, "Nama tidak boleh kosong."
+    if nama_baru in df['nama'].values:
+        return False, "Nama sudah ada."
+    new = pd.DataFrame({'nama': [nama_baru]})
+    pd.concat([df, new], ignore_index=True).to_csv(PEGAWAI_DB, index=False)
+    global DAFTAR_PEGAWAI
+    DAFTAR_PEGAWAI = load_pegawai()
+    return True, "Pegawai berhasil ditambahkan."
+
+def hapus_pegawai(nama):
+    df = pd.read_csv(PEGAWAI_DB)
+    if nama not in df['nama'].values:
+        return False, "Nama tidak ditemukan."
+    df = df[df['nama'] != nama]
+    df.to_csv(PEGAWAI_DB, index=False)
+    global DAFTAR_PEGAWAI
+    DAFTAR_PEGAWAI = load_pegawai()
+    return True, "Pegawai berhasil dihapus."
+
 def buat_notifikasi(id_rapat, daftar_pegawai, tanggal):
     df_notif = pd.read_csv(NOTIF_DB)
     for peg in daftar_pegawai:
@@ -375,12 +500,177 @@ def tandai_baca(id_rapat, pegawai):
     df.loc[(df['id_rapat'] == id_rapat) & (df['pegawai'] == pegawai), 'dibaca'] = True
     df.to_csv(NOTIF_DB, index=False)
 
-# --- SESSION STATE LOGIN ---
+def generate_pdf_resume(row):
+    try:
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+        
+        # ========== HEADER SATU BLOK BIRU ==========
+        pdf.set_fill_color(30, 60, 120)
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("Times", 'B', 16)
+        pdf.cell(0, 10, "LAPORAN HASIL RAPAT TPID", ln=True, align='C', fill=True)
+        pdf.set_font("Times", 'B', 11)
+        pdf.cell(0, 8, "Tim Pengendalian Inflasi Daerah Kota Batu", ln=True, align='C', fill=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.ln(6)
+        
+        def safe_str(val, default="-"):
+            s = str(val) if pd.notna(val) and str(val).strip() != '' else default
+            return s
+        
+        # ========== TABEL INFORMASI (RAPI) ==========
+        col_w_label = 45
+        col_w_value = pdf.w - pdf.l_margin - col_w_label - pdf.r_margin
+        line_h = 8
+        
+        def draw_table_row(label, value):
+            pdf.set_font("Times", 'B', 12)
+            pdf.cell(col_w_label, line_h, " " + label + " ", border=1, ln=0)
+            pdf.set_font("Times", '', 12)
+            pdf.multi_cell(col_w_value, line_h, " " + safe_str(value) + " ", border=1, ln=1)
+            pdf.set_x(pdf.l_margin)
+        
+        draw_table_row("Tanggal Rapat", safe_str(row.get('tanggal')))
+        draw_table_row("Petugas", safe_str(row.get('pegawai')))
+        draw_table_row("Link Undangan", safe_str(row.get('link_undangan')))
+        draw_table_row("Link Bahan", safe_str(row.get('link_bahan_materi')))
+        draw_table_row("Link Dokumentasi", safe_str(row.get('link_dokumentasi')))
+        pdf.ln(5)
+        
+        # ========== RINGKASAN INDIKATOR ==========
+        pdf.set_font("Times", 'B', 13)
+        pdf.set_text_color(30, 60, 120)
+        pdf.cell(0, 8, "RINGKASAN INDIKATOR PERUBAHAN HARGA", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Times", '', 11)
+        pdf.multi_cell(0, 6, safe_str(row.get('ringkasan_indikator'), "Data tidak tersedia."))
+        pdf.ln(4)
+        
+        # ========== RESUME ==========
+        pdf.set_font("Times", 'B', 13)
+        pdf.set_text_color(30, 60, 120)
+        pdf.cell(0, 8, "RESUME HASIL RAPAT", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Times", '', 11)
+        pdf.multi_cell(0, 6, safe_str(row.get('resume'), "Belum diisi"))
+        pdf.ln(4)
+        
+        # ========== TINDAK LANJUT ==========
+        pdf.set_font("Times", 'B', 13)
+        pdf.set_text_color(30, 60, 120)
+        pdf.cell(0, 8, "TINDAK LANJUT / ACTION ITEMS", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Times", '', 11)
+        pdf.multi_cell(0, 6, safe_str(row.get('action_items'), "Belum diisi"))
+        pdf.ln(4)
+        
+        # ========== STATUS ==========
+        pdf.set_font("Times", 'B', 13)
+        pdf.set_text_color(30, 60, 120)
+        pdf.cell(0, 8, "STATUS PENYELESAIAN", ln=True)
+        pdf.set_text_color(0, 0, 0)
+        pdf.set_font("Times", '', 12)
+        pdf.cell(0, 6, safe_str(row.get('status'), 'Belum ditentukan'), ln=True)
+        pdf.ln(6)
+        
+        # ========== DOKUMENTASI GAMBAR (GRID 2 KOLOM, KECIL) ==========
+        gambar_links = []
+        if 'gambar_dokumentasi' in row and pd.notna(row['gambar_dokumentasi']) and str(row['gambar_dokumentasi']).strip():
+            gambar_links = [link.strip() for link in str(row['gambar_dokumentasi']).split('\n') if link.strip()]
+        
+        if gambar_links:
+            pdf.set_font("Times", 'B', 13)
+            pdf.set_text_color(30, 60, 120)
+            pdf.cell(0, 8, "DOKUMENTASI KEGIATAN", ln=True)
+            pdf.set_text_color(0, 0, 0)
+            pdf.ln(3)
+            
+            # Pengaturan grid
+            img_w = 80          # lebar gambar kecil
+            img_h = 60          # perkiraan tinggi (akan disesuaikan proporsional)
+            margin_x = 10       # jarak antar gambar
+            margin_y = 5        # jarak vertikal antar baris
+            start_x = pdf.l_margin + 5
+            start_y = pdf.get_y()
+            current_x = start_x
+            current_y = start_y
+            count_in_row = 0
+            
+            session = requests.Session()
+            session.headers.update({'User-Agent': 'Mozilla/5.0'})
+            
+            for idx, link in enumerate(gambar_links, start=1):
+                try:
+                    resp = session.get(link, timeout=15)
+                    if resp.status_code == 200 and 'image' in resp.headers.get('Content-Type', ''):
+                        img_data = BytesIO(resp.content)
+                        # Tempatkan gambar di posisi saat ini
+                        pdf.image(img_data, x=current_x, y=current_y, w=img_w)
+                        count_in_row += 1
+                        # Pindah ke kanan untuk gambar berikutnya
+                        current_x += img_w + margin_x
+                        # Jika sudah 2 gambar, pindah ke baris baru
+                        if count_in_row == 2:
+                            current_x = start_x
+                            current_y += img_h + margin_y
+                            count_in_row = 0
+                    else:
+                        raise Exception(f"HTTP {resp.status_code} atau bukan gambar")
+                except Exception as e:
+                    pdf.set_font("Times", 'I', 9)
+                    pdf.set_xy(current_x, current_y)
+                    pdf.cell(img_w, 6, f"(Gambar {idx} gagal)", ln=True)
+                    # Tetap majukan posisi agar tidak bertumpuk
+                    current_x += img_w + margin_x
+                    if count_in_row == 2:
+                        current_x = start_x
+                        current_y += 10
+                        count_in_row = 0
+            
+            # Pindahkan kursor ke bawah grid terakhir
+            if count_in_row != 0:
+                current_y += img_h + margin_y
+            pdf.set_y(current_y + 5)
+        else:
+            pdf.set_font("Times", 'I', 11)
+            pdf.cell(0, 8, "Tidak ada gambar dokumentasi.", ln=True)
+        
+        return bytes(pdf.output())
+    
+    except Exception as e:
+        pdf = FPDF()
+        pdf.add_page()
+        pdf.set_font("Times", '', 12)
+        pdf.multi_cell(0, 10, f"Gagal membuat PDF: {e}")
+        return bytes(pdf.output())
+
+# --- SESSION STATE LOGIN (VERSI TERBARU UNTUK MULTISELECT) ---
 query_params = st.query_params
+
 if query_params.get("view") == "shared":
     st.session_state.logged_in = True
     st.session_state.user_role = "Publik_Shared"
     st.session_state.username = "Guest"
+    
+    # 1. Ambil data Tahun IPH dari link
+    if "tahun_iph" in query_params:
+        try:
+            # Mengubah "2023|2024" jadi [2023, 2024]
+            th_iph_list = [int(x) for x in query_params["tahun_iph"].split("|")]
+            st.session_state["iph_ultra_final"] = th_iph_list
+        except:
+            pass
+            
+    # 2. Ambil data Tahun Andil dari link
+    if "tahun_andil" in query_params:
+        try:
+            th_andil_list = [int(x) for x in query_params["tahun_andil"].split("|")]
+            st.session_state["andil_year_multiselect"] = th_andil_list
+        except:
+            pass
+
 elif 'logged_in' not in st.session_state:
     st.session_state.logged_in = False
     st.session_state.user_role = None
@@ -388,91 +678,123 @@ elif 'logged_in' not in st.session_state:
 
 # ======================= HALAMAN LOGIN =======================
 if not st.session_state.logged_in:
-    # --- Tambahan CSS untuk tema BPS (hanya warna, tidak ubah struktur) ---
+    # --- Custom CSS for Login Page (Dark & Orange Theme) ---
     st.markdown("""
         <style>
+            /* Latar belakang gelap + gradasi aksen oranye */
             .stApp {
-                background: linear-gradient(135deg, #0A1E3F 0%, #112B4F 100%) !important;
+                background: linear-gradient(145deg, #1E1E1E 0%, #2D2D2D 50%, #3E3E3E 100%) !important;
             }
+            /* Sembunyikan sidebar */
             [data-testid="stSidebar"] {
                 display: none;
             }
-            h1 {
-                color: #F8FAFC !important;
+            /* Judul & teks */
+            h1, h2, h3 {
+                color: #F97316 !important;
             }
             p, .stCaption {
-                color: #CBD5E1 !important;
+                color: #EEEEEE !important;
             }
-            /* Container tab */
+            /* Kontainer tab */
             .stTabs [data-baseweb="tab-list"] {
                 background: transparent;
-                gap: 8px;
+                gap: 12px;
+                justify-content: center;
             }
-            /* Semua tab (non-aktif & aktif) berlatar biru */
+            /* Tab (non-aktif) */
             .stTabs button[data-baseweb="tab"] {
-                background: #0F2A4A !important;      /* biru gelap */
+                background: rgba(255, 255, 255, 0.1) !important;
                 color: #FFFFFF !important;
-                font-weight: 600;
-                padding: 0.5rem 1.5rem;
-                border-radius: 30px;
-                border: none !important;
+                font-weight: 500;
+                padding: 0.5rem 2rem;
+                border-radius: 40px;
+                border: 1px solid rgba(249, 115, 22, 0.3) !important;
                 box-shadow: none !important;
+                transition: all 0.3s ease;
             }
             /* Hover tab non-aktif */
             .stTabs button[data-baseweb="tab"]:hover {
-                background: #1E3A8A !important;
+                background: rgba(249, 115, 22, 0.25) !important;
+                border-color: #F97316 !important;
             }
             /* Tab aktif */
             .stTabs button[data-baseweb="tab"][aria-selected="true"] {
-                background: #1E3A8A !important;
+                background: #F97316 !important;
                 color: #FFFFFF !important;
                 font-weight: 700;
-                border-bottom: 3px solid #F97316 !important;
+                border: 1px solid #F97316 !important;
+                box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
             }
             /* Label form */
             .stTextInput label, .stSelectbox label {
-                color: #F8FAFC !important;
+                color: #EEEEEE !important;
+                font-weight: 500;
             }
             /* Input field */
             .stTextInput > div > div > input,
             .stSelectbox > div > div {
-                background: rgba(255, 255, 255, 0.95) !important;
-                border: 1px solid #3B82F6 !important;
-                color: #0F172A !important;
-                border-radius: 12px !important;
+                background: rgba(30, 30, 30, 0.8) !important;
+                border: 1px solid #F97316 !important;
+                color: #FFFFFF !important;
+                border-radius: 14px !important;
+                padding: 0.6rem 1rem;
             }
             ::placeholder {
-                color: #64748B !important;
+                color: #FF9800 !important;
+                opacity: 0.7;
             }
-            /* Tombol utama */
+            /* >>> TAMBAHKAN DI SINI <<< */
+            .stSelectbox [data-baseweb="select"] [aria-selected="true"] {
+                color: #FFFFFF !important;
+            }
+            .stSelectbox [data-baseweb="select"] span {
+                color: #FFFFFF !important;
+            }
+            /* Tombol utama (oranye gradasi) */
             div.stButton > button:first-child {
-                background: linear-gradient(90deg, #1E3A8A 0%, #2563EB 100%) !important;
+                background: linear-gradient(90deg, #F97316 0%, #EA580C 100%) !important;
                 color: white !important;
                 border: none !important;
                 border-radius: 30px !important;
                 font-weight: 600 !important;
+                padding: 0.6rem 1.5rem;
+                transition: all 0.3s ease;
+                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
             }
             div.stButton > button:first-child:hover {
-                background: #F97316 !important;
+                background: linear-gradient(90deg, #EA580C 0%, #C2410C 100%) !important;
+                box-shadow: 0 6px 18px rgba(249, 115, 22, 0.6);
+                transform: translateY(-2px);
             }
-            /* Tombol outline (Lihat Publik) */
-            div.stButton > button[kind="secondary"] {
-                background: transparent !important;
-                border: 1.5px solid #F97316 !important;
-                color: #F97316 !important;
-            }
-            div.stButton > button[kind="secondary"]:hover {
-                background: #F97316 !important;
-                color: white !important;
-            }
-            /* Info box register */
+            /* Notifikasi / Alert */
             .stAlert {
-                background: rgba(30, 58, 138, 0.3) !important;
-                color: #E2E8F0 !important;
-                border-left-color: #F97316 !important;
+                background: rgba(249, 115, 22, 0.15) !important;
+                color: #FFFFFF !important;
+                border-left: 4px solid #F97316 !important;
+                border-radius: 12px;
+            }
+            /* Label form berwarna oranye terang */
+            .stTextInput label, .stSelectbox label {
+                color: #FF9800 !important;
+                font-weight: 600 !important;
+            }
+            /* Pastikan teks yang dipilih di dropdown berwarna putih */
+            .stSelectbox div[data-baseweb="select"] div {
+                color: #FFFFFF !important;
+            }
+            .stSelectbox [data-baseweb="select"] span {
+                color: #FFFFFF !important;
+            }
+            /* Paksa teks pilihan di dropdown menjadi putih */
+            div[data-baseweb="select"] span[class*="singleValue"],
+            div[data-baseweb="select"] div[class*="singleValue"],
+            div[data-baseweb="select"] div[data-value] {
+                color: #FFFFFF !important;
             }
         </style>
     """, unsafe_allow_html=True)
+
 
     def get_base64(bin_file):
         try:
@@ -484,6 +806,7 @@ if not st.session_state.logged_in:
 
     file_name = "Logo-Badan-Pusat-Statistik-BPS.png"
     bin_str = get_base64(file_name)
+    
     if bin_str:
         logo_html = f'<img src="data:image/png;base64,{bin_str}" width="100">'
     else:
@@ -501,16 +824,16 @@ if not st.session_state.logged_in:
         )
         st.markdown("""
             <div style="text-align: center;">
-                <h1 style='color:#1F3C88; margin-bottom: 0px; font-size: 34px;'>Dashboard IPH Kota Batu</h1>
-                <p style='color:#555; margin-top: -10px; font-weight: 500;'>Tim Pengendalian Inflasi Daerah (TPID)</p>
+                <h1 style='color:#F97316; margin-bottom: 0px; font-size: 34px;'>Dashboard IPH Kota Batu</h1>
+                <p style='color:#CCCCCC; margin-top: -10px; font-weight: 500;'>Tim Pengendalian Inflasi Daerah (TPID)</p>
             </div>
-            <p style='text-align:center; font-size:12px; color:#666; margin-top: -10px;'>
+            <p style='text-align:center; font-size:12px; color:#BBBBBB; margin-top: -10px;'>
             Sistem monitoring Indeks Perkembangan Harga (IPH) untuk analisis inflasi daerah secara berkala.
             </p>
         """, unsafe_allow_html=True)
         st.markdown("<br>", unsafe_allow_html=True)
        
-        tab_login, tab_register = st.tabs(["🔑 Login", "📝 Register"])
+        tab_login, tab_register = st.tabs(["Login", "Register"])
         with tab_login:
             with st.form("login_form"):
                 user_options = ["admin"] + DAFTAR_PEGAWAI
@@ -546,213 +869,141 @@ if not st.session_state.logged_in:
                             st.success(f"Akun untuk {selected_pegawai} berhasil dibuat! Silakan login dengan nama tersebut.")
                         else:
                             st.error("Username sudah digunakan. Silakan hubungi admin.")
-        if st.button("🔍 Lihat Dashboard Publik", use_container_width=True):
-            st.session_state.logged_in = True
-            st.session_state.user_role = "Publik"
-            st.session_state.username = "Guest"
-            st.rerun()
-        st.caption(f"Update: {datetime.now().strftime('%d %B %Y')}")
     st.stop()
 
 # ======================= TAMPILAN KHUSUS UNTUK SHARED VIEW =======================
 if st.session_state.user_role == "Publik_Shared":
-    # Sembunyikan sidebar dan kontrol navigasi
     st.markdown("""
         <style>
-            [data-testid="stSidebar"], [data-testid="collapsedControl"] {
-                display: none;
-            }
-            .main .block-container {
-                padding-top: 2rem;
-                padding-bottom: 2rem;
-            }
+            [data-testid="stSidebar"], [data-testid="collapsedControl"] { display: none; }
+            .main .block-container { padding-top: 2rem; padding-bottom: 2rem; }
+            * { font-family: 'Lexend', sans-serif; }
         </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div class='main-header'><h1>📊 Laporan IPH Kota Batu</h1></div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-header'><h1> Laporan IPH Kota Batu</h1></div>", unsafe_allow_html=True)
     
-    params = st.query_params
+    analisis_file = "iph_analisis.csv"
     
-    # Parameter dasar
+    if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
+        st.warning("Belum ada data IPH.")
+        st.stop()
+    
+    df = pd.read_csv(analisis_file)
+    if df.empty:
+        st.warning("Data IPH kosong.")
+        st.stop()
+    
+    bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
+    df['bulan_nama'] = df['bulan'].apply(lambda x: bulan_map[x])
+    
+    def format_original(value):
+        if isinstance(value, (int, float)):
+            s = f"{value:.10f}"
+            s = s.rstrip('0').rstrip('.')
+            return s
+        return value
+    
+    # Ambil SEMUA tahun yang tersedia, urutkan
+    tahun_tersedia = sorted(df['tahun'].unique())
+    
+    # ------------------------------------------------------------
+    # GRAFIK IPH (semua tahun, overlay)
+    # ------------------------------------------------------------
+    st.subheader("Tren Indikator Perubahan Harga (%)")
+    
+    # Buat mapping x untuk semua data
+    pair_list = df[['bulan', 'minggu_ke']].drop_duplicates().sort_values(['bulan','minggu_ke'])
+    x_mapping = {}
+    for idx, (b, m) in enumerate(zip(pair_list['bulan'], pair_list['minggu_ke'])):
+        x_mapping[(b, m)] = idx
+    df['x_pos'] = df.apply(lambda row: x_mapping[(row['bulan'], row['minggu_ke'])], axis=1)
+    df = df.sort_values(['tahun','x_pos'])
+    
+    tickvals, ticktext = [], []
+    bulan_sebelumnya = None
+    for (b,m), pos in x_mapping.items():
+        if b != bulan_sebelumnya:
+            tickvals.append(pos)
+            ticktext.append(bulan_map[b])
+            bulan_sebelumnya = b
+    
+    fig = go.Figure()
+    colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD', '#E67E22', '#9B59B6']
+    for i, th in enumerate(tahun_tersedia):
+        df_th = df[df['tahun'] == th].sort_values('x_pos')
+        if df_th.empty:
+            continue
+        x_vals = df_th['x_pos'].tolist()
+        y_vals = df_th['indikator'].tolist()
+        tooltips = df_th.apply(
+            lambda r: f"<b>Tahun {r['tahun']}</b><br>Minggu {r['minggu_ke']} {bulan_map[r['bulan']]}<br>IPH: {format_original(r['indikator'])}%",
+            axis=1
+        ).tolist()
+        fig.add_trace(go.Scatter(
+            x=x_vals, y=y_vals,
+            mode='lines+markers',
+            name=f"<b>{th}</b>",
+            line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
+            marker=dict(size=8, line=dict(width=1.5, color='white')),
+            hovertemplate='%{text}<extra></extra>',
+            text=tooltips,
+            hoverinfo='text'
+        ))
+    
+    fig.update_layout(
+        height=500,
+        font=dict(family="Lexend, sans-serif"),
+        plot_bgcolor='white',
+        hovermode='x unified',
+        margin=dict(t=80, b=50),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(family="Lexend")),
+        annotations=[dict(
+            text="<b>Indikator Perubahan Harga (%) per Minggu</b>",
+            xref="paper", yref="paper", x=0, y=1.12, showarrow=False,
+            font=dict(size=16, color="#333333", family="Lexend"), align="left"
+        )]
+    )
+    fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext, tickangle=0,
+                     range=[min(tickvals)-0.5, max(tickvals)+0.5] if tickvals else [0,1],
+                     showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
+    fig.update_yaxes(showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
+    st.plotly_chart(fig, use_container_width=True)
+    
+    # Tabel detail
+    st.write("**Data Detail Mingguan:**")
     try:
-        tahun = int(params.get("th", 0))
-        bulan = int(params.get("bl", 0))
-        minggu = int(params.get("mg", 0))
+        tabel = df.pivot_table(index='tahun', columns=['bulan','minggu_ke'], values='indikator').round(2)
+        tabel.columns = [f"{bulan_map.get(b,b)} M{int(m)}" for b,m in tabel.columns]
+        st.dataframe(tabel, use_container_width=True)
     except:
-        st.error("Parameter tahun/bulan/minggu tidak valid.")
-        st.stop()
+        pass
     
-    if not all([tahun, bulan, minggu]):
-        st.error("Link tidak lengkap.")
-        st.stop()
+    # ------------------------------------------------------------
+    # ANDIL KOMODITAS (gabungan semua tahun)
+    # ------------------------------------------------------------
+    st.subheader("Komoditas Paling Sering Menjadi Andil Perubahan Harga")
+    # Frekuensi digabung untuk semua tahun
+    freq = {}
+    for _, row in df.iterrows():
+        for kom in row['komoditas_andil'].split("|"):
+            kom = kom.strip()
+            freq[kom] = freq.get(kom, 0) + 1
     
-    df_iph = pd.read_csv(IPH_DB)
-    if df_iph.empty:
-        st.warning("Data IPH belum tersedia.")
-        st.stop()
-    
-    # Tampilkan ringkasan teks (selalu ada)
-    data_periode = df_iph[(df_iph['tahun']==tahun) & (df_iph['bulan']==bulan) & (df_iph['minggu_ke']==minggu)]
-    if data_periode.empty:
-        st.warning(f"Data untuk minggu ke-{minggu} bulan {bulan} {tahun} tidak ditemukan.")
-        st.stop()
-    
-    ringkasan = generate_ringkasan_indikator(tahun, bulan, minggu, df_iph)
-    st.markdown("### 📝 Ringkasan Indikator")
-    st.code(ringkasan, language='text')
-    st.markdown("---")
-    
-    # Ambil parameter visualisasi
-    chart_type = params.get("chart", "")
-    
-    bulan_map = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"Mei", 6:"Jun", 7:"Jul", 8:"Agu", 9:"Sep", 10:"Okt", 11:"Nov", 12:"Des"}
-    
-    # --- Render grafik sesuai chart_type ---
-    if chart_type == "Tren Harga (Bulanan/Mingguan)":
-        mode = params.get("mode", "")
-        if mode == "Bulanan (Perbandingan Tahun)":
-            kom_param = params.get("kom", "")
-            thn_param = params.get("thn", "")
-            kom_pilih = kom_param.split("|") if kom_param else []
-            th_pilih = [int(x) for x in thn_param.split("|") if x] if thn_param else []
-            
-            if not kom_pilih or not th_pilih:
-                st.warning("Parameter komoditas atau tahun tidak lengkap.")
-            else:
-                plot_df = df_iph[(df_iph['komoditas'].isin(kom_pilih)) & (df_iph['tahun'].isin(th_pilih))]
-                if plot_df.empty:
-                    st.warning("Data tidak ditemukan untuk filter yang diberikan.")
-                else:
-                    plot_df = plot_df.groupby(['tahun', 'bulan', 'komoditas'])['harga'].mean().reset_index()
-                    plot_df['legenda'] = plot_df['tahun'].astype(str) + " - " + plot_df['komoditas']
-                    tab_pivot = plot_df.pivot_table(index='legenda', columns='bulan', values='harga').reset_index()
-                    for b in range(1,13):
-                        if b not in tab_pivot.columns:
-                            tab_pivot[b] = None
-                    tab_pivot = tab_pivot[['legenda'] + list(range(1,13))]
-                    
-                    def format_ribuan(x):
-                        if pd.isna(x): return ""
-                        return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                    
-                    header_values = ['<b>Tahun / Komoditas</b>'] + [f"<b>{bulan_map[i]}</b>" for i in range(1,13)]
-                    cell_values = [tab_pivot['legenda'].tolist()]
-                    for b in range(1,13):
-                        cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
-                    
-                    fig = make_subplots(
-                        rows=2, cols=1,
-                        shared_xaxes=True,
-                        vertical_spacing=0.05,
-                        row_heights=[0.6, 0.4],
-                        specs=[[{"type": "scatter"}], [{"type": "table"}]]
-                    )
-                    for leg in tab_pivot['legenda']:
-                        data_leg = plot_df[plot_df['legenda'] == leg].sort_values('bulan')
-                        fig.add_trace(
-                            go.Scatter(x=data_leg['bulan'], y=data_leg['harga'],
-                                       mode='lines+markers', line=dict(width=3), name=leg),
-                            row=1, col=1
-                        )
-                    fig.add_trace(
-                        go.Table(
-                            header=dict(values=header_values, fill_color='#1e3a8a',
-                                        font=dict(color='white', size=12), align='center'),
-                            cells=dict(values=cell_values, fill_color='white',
-                                       align=['left'] + ['center']*12, height=25)
-                        ),
-                        row=2, col=1
-                    )
-                    fig.update_layout(
-                        title="<b>Tren Harga Rata-rata Bulanan</b>",
-                        height=750,
-                        margin=dict(l=20, r=20, t=60, b=80),
-                        plot_bgcolor='white',
-                        showlegend=True,
-                        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
-                    )
-                    fig.update_xaxes(tickmode='array', tickvals=list(range(1,13)),
-                                     ticktext=list(bulan_map.values()), showgrid=True, gridcolor='lightgray', row=1, col=1)
-                    fig.update_yaxes(title="Harga (Rp)", showgrid=True, gridcolor='lightgray', row=1, col=1)
-                    st.plotly_chart(fig, use_container_width=True)
-        
-        else:  # Mingguan
-            th_s = int(params.get("th_s", tahun))
-            bl_s = int(params.get("bl_s", bulan))
-            kom_param = params.get("kom", "")
-            mg_param = params.get("mg_pilih", "")
-            kom_pilih = kom_param.split("|") if kom_param else []
-            mg_pilih = [int(x) for x in mg_param.split("|") if x] if mg_param else []
-            
-            if not kom_pilih or not mg_pilih:
-                st.warning("Parameter tidak lengkap.")
-            else:
-                plot_df = df_iph[(df_iph['tahun']==th_s) & (df_iph['bulan']==bl_s) &
-                                 (df_iph['komoditas'].isin(kom_pilih)) & (df_iph['minggu_ke'].isin(mg_pilih))]
-                if plot_df.empty:
-                    st.warning("Data tidak ditemukan.")
-                else:
-                    fig = px.line(plot_df, x='minggu_ke', y='harga', color='komoditas',
-                                  markers=True, title=f"Harga Asli Mingguan ({bulan_map[bl_s]} {th_s})")
-                    st.plotly_chart(fig, use_container_width=True)
-                    st.markdown("**Tabel Harga Asli (Rp):**")
-                    tab_m = plot_df.pivot_table(index='komoditas', columns='minggu_ke', values='harga', fill_value=0)
-                    st.dataframe(tab_m, use_container_width=True)
-    
-    elif chart_type == "Andil Perubahan Harga (Frekuensi)":
-        df_iph['persen_change'] = pd.to_numeric(df_iph['persen_change'], errors='coerce').fillna(0)
-        andil_df = df_iph[df_iph['persen_change'] != 0].groupby('komoditas').size().reset_index(name='frekuensi')
-        if andil_df.empty:
-            st.info("Belum ada data perubahan harga.")
-        else:
-            andil_df = andil_df.sort_values('frekuensi', ascending=False)
-            fig = px.bar(andil_df, x='frekuensi', y='komoditas', orientation='h',
-                         title="Frekuensi Perubahan Harga", text='frekuensi')
-            fig.update_traces(textposition='outside')
-            st.plotly_chart(fig, use_container_width=True)
-            st.dataframe(andil_df.set_index('komoditas'), use_container_width=True)
-    
-    elif chart_type == "Komoditas Paling Fluktuatif":
-        fluktuasi = df_iph.groupby('komoditas')['harga'].std().reset_index(name='std_dev')
-        fluktuasi = fluktuasi.sort_values('std_dev', ascending=False).head(5)
-        fig = px.bar(fluktuasi, x='komoditas', y='std_dev', title="Top 5 Komoditas Paling Fluktuatif", text='std_dev')
-        fig.update_traces(textposition='outside')
-        st.plotly_chart(fig, use_container_width=True)
-        st.dataframe(fluktuasi.set_index('komoditas'), use_container_width=True)
-    
-    elif chart_type == "Indikator Perubahan Harga (%)":
-        th_p = int(params.get("th_p", tahun))
-        kom_param = params.get("kom", "")
-        kom_pilih = kom_param.split("|") if kom_param else []
-        if not kom_pilih:
-            st.warning("Pilih komoditas tidak ditemukan.")
-        else:
-            ind_df = df_iph[(df_iph['tahun']==th_p) & (df_iph['komoditas'].isin(kom_pilih))].sort_values(['bulan', 'minggu_ke'])
-            ind_df['periode'] = ind_df.apply(lambda x: f"{bulan_map[x['bulan']]} M{x['minggu_ke']}", axis=1)
-            fig = px.line(ind_df, x='periode', y='persen_change', color='komoditas',
-                          markers=True, title="Perubahan Harga (%)")
-            fig.add_hline(y=0, line_dash="dash", line_color="red")
-            st.plotly_chart(fig, use_container_width=True)
-            tab_persen = ind_df.pivot_table(index='komoditas', columns='periode', values='persen_change', fill_value=0)
-            st.dataframe(tab_persen, use_container_width=True)
-    
+    # 5 teratas
+    top_kom = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:5]
+    if top_kom:
+        df_bar = pd.DataFrame(top_kom, columns=['Komoditas', 'Frekuensi'])
+        fig_bar = px.bar(df_bar, x='Komoditas', y='Frekuensi',
+                         title="5 Besar Komoditas Andil Perubahan Harga (Semua Tahun)",
+                         color_discrete_sequence=['#FDCB6E'])
+        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white'), cornerradius=10),
+                              textposition='outside', textfont_size=12, textfont_family="Lexend")
+        fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
+                              xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
+        st.plotly_chart(fig_bar, use_container_width=True)
     else:
-        # Fallback: tampilkan bar chart mingguan sederhana
-        st.markdown("### 📈 Harga Komoditas Minggu Ini")
-        plot_df = data_periode.sort_values('harga', ascending=False)
-        fig = px.bar(plot_df, x='komoditas', y='harga', text='harga', color='harga',
-                     color_continuous_scale='Blues',
-                     title=f"Minggu ke-{minggu} {bulan_map[bulan]} {tahun}")
-        fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
-        fig.update_layout(xaxis_tickangle=-45, height=500)
-        st.plotly_chart(fig, use_container_width=True)
-        
-        st.markdown("### 📋 Tabel Harga Lengkap")
-        tabel = data_periode[['komoditas', 'harga', 'persen_change']].copy()
-        tabel['harga'] = tabel['harga'].apply(lambda x: f"{x:,.2f}")
-        tabel['persen_change'] = tabel['persen_change'].apply(lambda x: f"{x:+.2f}%")
-        st.dataframe(tabel.rename(columns={'komoditas':'Komoditas','harga':'Harga (Rp)','persen_change':'Perubahan (%)'}),
-                     use_container_width=True, hide_index=True)
+        st.info("Belum ada data andil.")
     
     st.caption(f"Laporan diakses pada {datetime.now().strftime('%d %B %Y, %H:%M')} WIB")
     st.stop()
@@ -832,25 +1083,7 @@ def render_sidebar():
         if is_active:
             st.sidebar.markdown(
                 f"""
-                <div style="background:#1E3A8A; border-left:4px solid #F97316; padding:0.6rem 1rem; border-radius:8px; margin-bottom:2px; color:white !important; font-weight:500;">
-                    {icon} {label}
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        else:
-            if st.sidebar.button(f"{icon} {label}", key=key, use_container_width=True):
-                st.session_state.current_menu = label
-                st.rerun()
-
-    # === FUNGSI TOMBOL MENU ===
-    def menu_button(label, key, icon=""):
-        current = st.session_state.get("current_menu", "Beranda")
-        is_active = (current == label)
-        if is_active:
-            st.sidebar.markdown(
-                f"""
-                <div style="background:#1E3A8A; border-left:4px solid #F97316; padding:0.6rem 1rem; border-radius:8px; margin-bottom:2px; color:white !important; font-weight:500;">
+                <div style="background:#F97316; border-left:4px solid #FFE0B2; padding:0.6rem 1rem; border-radius:8px; margin-bottom:2px; color:white !important; font-weight:500;">
                     {icon} {label}
                 </div>
                 """,
@@ -862,37 +1095,36 @@ def render_sidebar():
                 st.rerun()
 
     # === MENU UTAMA ===
-    st.sidebar.markdown('<div class="sidebar-section-title">📌 MENU UTAMA</div>', unsafe_allow_html=True)
-    menu_button("Beranda", "nav_beranda", "🏠")
+    st.sidebar.markdown('<div class="sidebar-section-title">MENU UTAMA</div>', unsafe_allow_html=True)
+    menu_button("Beranda", "nav_beranda", "")
     
     if st.session_state.user_role == "Admin":
-        menu_button("Kelola Rapat", "nav_kelola_rapat", "📅")
-        menu_button("Monitoring Resume", "nav_monitoring", "📋")
-        menu_button("Input Rekap IPH", "nav_input_iph", "📊")
+        menu_button("Kelola Rapat", "nav_kelola_rapat", "")
+        menu_button("Monitoring Resume", "nav_monitoring", "")
+        menu_button("Kelola Pegawai", "nav_kelola_pegawai", "")
+        menu_button("Input Rekap IPH", "nav_input_iph", "")
     
     if st.session_state.user_role == "Pegawai":
-        menu_button("Isi Resume Rapat", "nav_isi_resume", "✏️")
-        menu_button("Input Rekap IPH", "nav_input_iph", "📊")
-    
-    menu_button("Rekapan IPH", "nav_rekapan", "📑")
+        menu_button("Isi Resume Rapat", "nav_isi_resume", "")
+        menu_button("Input Rekap IPH", "nav_input_iph", "")
+
+    menu_button("Rekapan IPH", "nav_rekapan", "")
     
     # === VISUALISASI & ANALISIS ===
-    st.sidebar.markdown('<div class="sidebar-section-title">📈 VISUALISASI & ANALISIS</div>', unsafe_allow_html=True)
-    if st.session_state.user_role in ["Admin", "Pegawai", "Publik"]:
-        menu_button("Visualisasi IPH", "nav_visualisasi", "📊")
-        menu_button("Analisis IPH", "nav_analisis", "🔍")
-    if st.session_state.user_role == "Publik":
-        menu_button("Lihat Rapat", "nav_lihat_rapat", "👀")
-
-    st.sidebar.markdown("<hr style='margin:1.5rem 0; border-color:#2D4A6E;'>", unsafe_allow_html=True)
+    st.sidebar.markdown('<div class="sidebar-section-title">VISUALISASI & ANALISIS</div>', unsafe_allow_html=True)
+    if st.session_state.user_role in ["Admin", "Pegawai"]:
+        menu_button("Visualisasi IPH", "nav_visualisasi", "")
+        menu_button("Analisis IPH", "nav_analisis", "")
 
     # === LOGOUT ===
     if st.session_state.user_role != "Publik_Shared":
-        if st.sidebar.button("🚪 Keluar", use_container_width=True):
+        if st.sidebar.button("Keluar", use_container_width=True):
             for key in ['logged_in', 'user_role', 'username', 'current_menu']:
                 if key in st.session_state:
                     del st.session_state[key]
             st.rerun()
+
+    st.sidebar.markdown("<hr style='margin:1.5rem 0; border-color:#2D4A6E;'>", unsafe_allow_html=True)
 
     # Inisialisasi current_menu jika belum ada
     if 'current_menu' not in st.session_state:
@@ -907,27 +1139,37 @@ menu = st.session_state.current_menu
 # ======================= BERANDA =======================
 if menu == "Beranda":
     st.markdown("<div class='main-header'><h1>Selamat Datang di Dashboard IPH Kota Batu</h1><p>Monitoring inflasi dan rapat TPID</p></div>", unsafe_allow_html=True)
-    df_iph = pd.read_csv(IPH_DB)
+    analisis_file = "iph_analisis.csv"
     indeks_text = "-"
     indeks_caption = "Data IPH belum tersedia"
-    if not df_iph.empty:
-        max_tahun = df_iph['tahun'].max()
-        df_tahun = df_iph[df_iph['tahun'] == max_tahun]
-        max_bulan = df_tahun['bulan'].max()
-        df_bulan = df_tahun[df_tahun['bulan'] == max_bulan]
-        max_minggu = df_bulan['minggu_ke'].max()
-        data_terbaru = df_bulan[df_bulan['minggu_ke'] == max_minggu]
-        if not data_terbaru.empty:
-            rata_persen = data_terbaru['persen_change'].mean()
-            if rata_persen > 0:
-                status = "Inflasi"
-            elif rata_persen < 0:
-                status = "Deflasi"
-            else:
-                status = "Stabil"
-            indeks_text = f"{rata_persen:+.2f}%".replace('.', ',')
-            bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][max_bulan-1]
-            indeks_caption = f"{status} (Minggu {max_minggu} {bulan_nama} {max_tahun})"
+    if os.path.exists(analisis_file) and os.path.getsize(analisis_file) > 0:
+        df_iph = pd.read_csv(analisis_file)
+        if not df_iph.empty:
+            # Cari periode terbaru: tahun terbesar, lalu bulan terbesar, lalu minggu terbesar
+            max_tahun = df_iph['tahun'].max()
+            df_tahun = df_iph[df_iph['tahun'] == max_tahun]
+            max_bulan = df_tahun['bulan'].max()
+            df_bulan = df_tahun[df_tahun['bulan'] == max_bulan]
+            max_minggu = df_bulan['minggu_ke'].max()
+            data_terbaru = df_bulan[df_bulan['minggu_ke'] == max_minggu]
+            if not data_terbaru.empty:
+                indikator = data_terbaru.iloc[0]['indikator']   # ambil nilai indikator
+                if indikator > 0:
+                    status = "Inflasi"
+                elif indikator < 0:
+                    status = "Deflasi"
+                else:
+                    status = "Stabil"
+                # Format angka sesuai input asli, tidak dibatasi 2 desimal
+                def format_original(value):
+                    if isinstance(value, (int, float)):
+                        s = f"{value:.10f}"
+                        s = s.rstrip('0').rstrip('.')
+                        return s
+                    return value
+                indeks_text = f"{format_original(indikator)}%".replace('.', ',')
+                bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][max_bulan-1]
+                indeks_caption = f"{status} (Minggu {max_minggu} {bulan_nama} {max_tahun})"
     col1, col2, col3 = st.columns(3)
     with col1:
         st.markdown(f"<div class='metric-card'><h3>Indeks Perkembangan Harga</h3><p style='font-size:2rem;'>{indeks_text}</p><p>{indeks_caption}</p></div>", unsafe_allow_html=True)
@@ -948,8 +1190,6 @@ if menu == "Beranda":
         st.info("Sebagai Admin, Anda dapat membuat rapat, memilih petugas, dan memonitor pengisian resume.")
     elif st.session_state.user_role == "Pegawai":
         st.info("Sebagai Pegawai, Anda akan mendapatkan notifikasi jika ditugaskan mengisi resume rapat.")
-    else:
-        st.info("Anda mengakses sebagai publik. Data rapat dan grafik IPH dapat dilihat.")
 
 # ======================= ADMIN: KELOLA RAPAT =======================
 if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
@@ -962,7 +1202,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
         pegawai_terpilih = st.multiselect("Pilih Pegawai Yang Bertugas Mengisi Resume", DAFTAR_PEGAWAI)
         link_undangan = st.text_input("Link Radiogram/Undangan")
         link_bahan = st.text_input("Link Bahan Materi")
-        link_dok = st.text_input("Link Folder Dokumentasi")
+        link_dok = st.text_input("Upload Dokumentasi pada Tautan berikut")
         submitted = st.form_submit_button("Buat Rapat")
         if submitted:
             if not link_undangan.strip() or not link_bahan.strip() or not link_dok.strip():
@@ -973,8 +1213,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                 tahun_rapat = tanggal.year
                 bulan_rapat = tanggal.month
                 minggu_rapat = get_minggu_dari_tanggal(tanggal)
-                df_iph_rapat = pd.read_csv(IPH_DB)
-                ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat, df_iph_rapat)
+                ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat)
                 df = pd.read_csv(RAPAT_DB)
                 new_id = len(df) + 1 if not df.empty else 1
                 new_row = pd.DataFrame([{
@@ -1053,6 +1292,53 @@ if st.session_state.user_role == "Admin" and menu == "Monitoring Resume":
         st.markdown(f"**Resume:** {row['resume']}")
         st.markdown(f"**Action Items:** {row['action_items']}")
         st.markdown(f"**Status:** {row['status']}")
+        st.markdown("---")
+        if st.button("Export PDF", key=f"pdf_admin_{pilih_id}"):
+                pdf_bytes = generate_pdf_resume(row)
+                st.download_button(
+                    label="📥 Unduh PDF",
+                    data=pdf_bytes,
+                    file_name=f"resume_rapat_{row['id']}.pdf",
+                    mime="application/pdf",
+                    key=f"download_admin_{pilih_id}"
+                )        
+
+# ======================= ADMIN: KELOLA PEGAWAI =======================
+if st.session_state.user_role == "Admin" and menu == "Kelola Pegawai":
+    st.title("Kelola Pegawai TPID")
+    
+    tab1, tab2 = st.tabs(["➕ Tambah Pegawai", "➖ Hapus Pegawai"])
+    
+    with tab1:
+        with st.form("form_tambah_pegawai"):
+            nama_baru = st.text_input("Nama Pegawai Baru (tanpa gelar)")
+            btn_tambah = st.form_submit_button("Tambah")
+            if btn_tambah:
+                sukses, pesan = tambah_pegawai(nama_baru)
+                if sukses:
+                    st.success(pesan)
+                    st.rerun()
+                else:
+                    st.error(pesan)
+    
+    with tab2:
+        pegawai_list = load_pegawai()
+        if not pegawai_list:
+            st.info("Belum ada pegawai.")
+        else:
+            with st.form("form_hapus_pegawai"):
+                nama_hapus = st.selectbox("Pilih Pegawai yang Akan Dihapus", pegawai_list)
+                btn_hapus = st.form_submit_button("Hapus")
+                if btn_hapus:
+                    sukses, pesan = hapus_pegawai(nama_hapus)
+                    if sukses:
+                        st.success(pesan)
+                        st.rerun()
+                    else:
+                        st.error(pesan)
+    
+    st.subheader("Daftar Pegawai Saat Ini")
+    st.write(load_pegawai())
 
 # ======================= PEGAWAI: ISI RESUME RAPAT =======================
 def form_isi_resume_pegawai(row):
@@ -1060,6 +1346,14 @@ def form_isi_resume_pegawai(row):
         ringkasan = st.text_area("Ringkasan awal", value=row['ringkasan_indikator'] if pd.notna(row['ringkasan_indikator']) else "", height=100)
         resume = st.text_area("Resume Hasil Rapat", value=row['resume'] if pd.notna(row['resume']) else "", height=150)
         action = st.text_area("Action Items", value=row['action_items'] if pd.notna(row['action_items']) else "", height=100)
+        old_val = row['gambar_dokumentasi'] if pd.notna(row.get('gambar_dokumentasi')) else ""
+        gambar_dok = st.text_area(
+            "Link Gambar Dokumentasi (satu link per baris)",
+            value=old_val,
+            height=100,
+            help="Tempel link Google Drive apa adanya (biasa atau direct). Sistem akan otomatis mengubahnya.",
+            placeholder="https://drive.google.com/file/d/...\nhttps://drive.google.com/uc?export=view&id=..."
+        )
         status = st.selectbox("Status", ["Belum Diisi", "Proses", "Selesai"], index=["Belum Diisi", "Proses", "Selesai"].index(row['status'] if pd.notna(row['status']) else "Belum Diisi"))
         submitted = st.form_submit_button("Simpan Resume")
         if submitted:
@@ -1068,6 +1362,26 @@ def form_isi_resume_pegawai(row):
             df.at[idx, 'ringkasan_indikator'] = ringkasan
             df.at[idx, 'resume'] = resume
             df.at[idx, 'action_items'] = action
+            # Konversi semua link ke direct link
+            import re
+            links = gambar_dok.strip().split('\n')
+            direct_links = []
+            for link in links:
+                link = link.strip()
+                if not link:
+                    continue
+                # Cari pola /file/d/ID/
+                match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
+                if match:
+                    file_id = match.group(1)
+                    direct_link = f"https://drive.google.com/uc?export=view&id={file_id}"
+                    direct_links.append(direct_link)
+                else:
+                    # Biarkan jika sudah direct link
+                    direct_links.append(link)
+            gambar_dok_bersih = "\n".join(direct_links)
+            
+            df.at[idx, 'gambar_dokumentasi'] = gambar_dok_bersih
             df.at[idx, 'status'] = status
             df.at[idx, 'last_editor'] = st.session_state.username
             df.to_csv(RAPAT_DB, index=False)
@@ -1092,343 +1406,586 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
             with st.expander(f"Rapat {row['tanggal']} - Status: {row['status']}"):
                 st.markdown(f"**Link Undangan:** {row['link_undangan']}")
                 st.markdown(f"**Link Bahan:** {row['link_bahan_materi']}")
-                st.markdown(f"**Link Dokumentasi:** {row['link_dokumentasi']}")
+                st.markdown(f"**Upload Dokumentasi di Tautan Berikut:** {row['link_dokumentasi']}")
                 st.markdown("---")
                 form_isi_resume_pegawai(row)
+                st.markdown("---")
+            if st.button("📄 Export PDF", key=f"pdf_pegawai_{row['id']}"):
+                pdf_bytes = generate_pdf_resume(row)
+                st.download_button(
+                    label="📥 Unduh PDF",
+                    data=pdf_bytes,
+                    file_name=f"resume_rapat_{row['id']}.pdf",
+                    mime="application/pdf",
+                    key=f"download_pegawai_{row['id']}"
+                )            
 
-# ======================= REKAPAN DATA IPH =======================
+# ======================= REKAPAN IPH (Data Ringkasan) =======================
 if menu == "Rekapan IPH":
-    st.title("📋 Rekapan Data IPH - Per Komoditas per Minggu")
-    df_iph = pd.read_csv(IPH_DB)
-    if df_iph.empty:
-        st.warning("Belum ada data IPH.")
+    st.title("Rekapan Data IPH (Ringkasan per Minggu)")
+    
+    analisis_file = "iph_analisis.csv"
+    if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
+        st.warning("Belum ada data. Silakan input data melalui menu Input Rekap IPH.")
     else:
-        col1, col2 = st.columns(2)
+        df = pd.read_csv(analisis_file)
+        bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
+        df['bulan_nama'] = df['bulan'].apply(lambda x: bulan_map[x])
+        df['periode'] = df.apply(lambda x: f"Minggu {x['minggu_ke']} {x['bulan_nama']} {x['tahun']}", axis=1)
+        
+        # Filter tahun
+        tahun_list = sorted(df['tahun'].unique())
+        tahun_pilih = st.selectbox("Filter Tahun", ["Semua"] + tahun_list)
+        if tahun_pilih != "Semua":
+            df_filter = df[df['tahun'] == tahun_pilih]
+        else:
+            df_filter = df
+        
+        st.dataframe(df_filter[['periode','indikator','komoditas_andil','nilai_andil','fluktuasi_komoditas','fluktuasi_nilai','last_updated']], use_container_width=True, hide_index=True)
+        
+        csv = df_filter.to_csv(index=False).encode('utf-8')
+        st.download_button("Download Data (CSV)", data=csv, file_name="rekap_iph_ringkasan.csv", mime="text/csv")
+        
+        # --- FITUR HAPUS DATA PER PERIODE ---
+        st.markdown("---")
+        st.subheader("Hapus Data Periode Tertentu")
+        col1, col2, col3 = st.columns(3)
         with col1:
-            tahun_list = sorted(df_iph['tahun'].unique())
-            tahun_pilih = st.multiselect("Pilih Tahun", tahun_list, default=tahun_list)
+            tahun_hapus = st.selectbox("Tahun", tahun_list, key="hapus_tahun")
         with col2:
-            bulan_list = sorted(df_iph['bulan'].unique())
-            bulan_pilih = st.multiselect("Pilih Bulan", bulan_list, default=bulan_list, format_func=lambda x: ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][x-1])
-        komoditas_all = get_komoditas_list()
-        pilih_semua_kom = st.checkbox("Pilih Semua Komoditas", value=True)
-        if pilih_semua_kom:
-            komoditas_pilih = komoditas_all
-        else:
-            komoditas_pilih = st.multiselect("Pilih Komoditas", komoditas_all, default=komoditas_all[:5])
-        if not tahun_pilih or not bulan_pilih or not komoditas_pilih:
-            st.info("Pilih minimal satu tahun, satu bulan, dan satu komoditas.")
-        else:
-            filtered = df_iph[(df_iph['tahun'].isin(tahun_pilih)) & (df_iph['bulan'].isin(bulan_pilih)) & (df_iph['komoditas'].isin(komoditas_pilih))]
-            if filtered.empty:
-                st.warning("Tidak ada data untuk filter ini.")
+            bulan_hapus = st.selectbox("Bulan", range(1,13), format_func=lambda x: bulan_map[x], key="hapus_bulan")
+        with col3:
+            # Ambil minggu yang tersedia untuk kombinasi tahun dan bulan yang dipilih
+            if not df.empty:
+                minggu_tersedia = sorted(df[(df['tahun']==tahun_hapus) & (df['bulan']==bulan_hapus)]['minggu_ke'].unique())
             else:
-                pivot_df = filtered.pivot_table(index='komoditas', columns=['tahun', 'bulan', 'minggu_ke'], values='harga', aggfunc='first').fillna(0)
-                pivot_df = pivot_df.sort_index(axis=1)
-                bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
-                new_cols = []
-                for t, b, m in pivot_df.columns:
-                    new_cols.append(f"{bulan_map[b]} {t} - M{m}")
-                pivot_df.columns = new_cols
-                pivot_df['Rata-rata'] = pivot_df.mean(axis=1).round(3)
-                st.subheader("Tabel Harga per Komoditas (Rp)")
-                st.dataframe(pivot_df, use_container_width=True)
-                csv = pivot_df.reset_index().to_csv(index=False).encode('utf-8')
-                st.download_button("📥 Download Tabel (CSV)", data=csv, file_name=f"rekap_iph_pivot_{datetime.now().strftime('%Y%m%d')}.csv", mime="text/csv")
-                with st.expander("Lihat Data Mentah"):
-                    st.dataframe(filtered.sort_values(['tahun','bulan','minggu_ke','komoditas']), use_container_width=True)
-
-# ======================= INPUT REKAP IPH =======================
-if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap IPH":
-    st.title("📊 Input Rekap IPH")
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        tahun = st.number_input("Tahun", min_value=2020, max_value=2030, value=datetime.now().year, key="tahun_input")
-    with col2:
-        bulan = st.selectbox("Bulan", range(1,13), index=datetime.now().month-1, format_func=lambda x: ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][x-1], key="bulan_input")
-    with col3:
-        minggu = st.number_input("Minggu ke-", min_value=1, max_value=5, value=1, key="minggu_input")
-    komoditas_list = get_komoditas_list()
-    if not komoditas_list:
-        st.warning("Belum ada komoditas.")
-        with st.expander("➕ Tambah Komoditas"):
-            kom_baru = st.text_input("Nama komoditas baru")
-            if st.button("Tambah") and kom_baru:
-                add_komoditas(kom_baru)
+                minggu_tersedia = []
+            minggu_hapus = st.selectbox("Minggu ke-", minggu_tersedia, key="hapus_minggu")
+        
+        if st.button("Hapus Data", type="secondary", use_container_width=True):
+            if not minggu_tersedia:
+                st.error("Tidak ada data untuk periode yang dipilih.")
+            else:
+                # Baca data asli
+                df_original = pd.read_csv(analisis_file)
+                # Hapus baris yang sesuai
+                df_original = df_original[~((df_original['tahun']==tahun_hapus) & (df_original['bulan']==bulan_hapus) & (df_original['minggu_ke']==minggu_hapus))]
+                df_original.to_csv(analisis_file, index=False)
+                st.toast(f"Data untuk Minggu {minggu_hapus} {bulan_map[bulan_hapus]} {tahun_hapus} berhasil dihapus.", icon="🗑️")
                 st.rerun()
-        st.stop()
-    df_iph = pd.read_csv(IPH_DB)
-    existing = df_iph[(df_iph['tahun']==tahun) & (df_iph['bulan']==bulan) & (df_iph['minggu_ke']==minggu)]
-    edit_df = pd.DataFrame({"Komoditas": komoditas_list})
-    edit_df["Harga"] = "0"
-    for _, row in existing.iterrows():
-        idx = edit_df[edit_df["Komoditas"] == row['komoditas']].index
-        if not idx.empty:
-            val = row['harga']
-            if isinstance(val, float) and val.is_integer():
-                edit_df.at[idx[0], "Harga"] = str(int(val))
-            else:
-                s = f"{val:.10f}".rstrip('0').rstrip('.')
-                edit_df.at[idx[0], "Harga"] = s
-    if 'reset_counter' not in st.session_state:
-        st.session_state.reset_counter = 0
-    st.markdown("### ✏️ Edit Harga per Komoditas")
-    edited_df = st.data_editor(edit_df, column_config={"Komoditas": st.column_config.TextColumn(disabled=True), "Harga": st.column_config.TextColumn()}, use_container_width=True, hide_index=True, key=f"iph_editor_{st.session_state.reset_counter}")
-    def parse_harga(s):
-        if s is None or s == "": return 0.0
-        s = str(s).strip().replace(',', '.')
-        try: return float(s)
-        except: return 0.0
-    col_save, col_reset = st.columns(2)
-    with col_save:
-        if st.button("💾 Simpan Data", use_container_width=True, type="primary"):
-            harga_list = [parse_harga(row["Harga"]) for _, row in edited_df.iterrows()]
-            save_iph_data(tahun, bulan, minggu, komoditas_list, harga_list)
-            st.success(f"Data periode {tahun}-{bulan}-{minggu} berhasil disimpan!")
-            st.session_state.reset_counter += 1
-            st.rerun()
-    with col_reset:
-        if st.button("🔄 Reset (kosongkan semua)", use_container_width=True):
-            df_ip_reset = pd.read_csv(IPH_DB)
-            df_ip_reset = df_ip_reset[~((df_ip_reset['tahun']==tahun) & (df_ip_reset['bulan']==bulan) & (df_ip_reset['minggu_ke']==minggu))]
-            df_ip_reset.to_csv(IPH_DB, index=False)
-            st.session_state.reset_counter += 1
-            st.rerun()
-    with st.expander("✏️ Kelola Daftar Komoditas"):
-        col_tambah, col_hapus = st.columns(2)
-        with col_tambah:
-            kom_baru = st.text_input("Nama komoditas baru", key="tambah_kom")
-            if st.button("Tambah Komoditas"):
-                if kom_baru and add_komoditas(kom_baru):
-                    st.session_state.reset_counter += 1
-                    st.rerun()
-        with col_hapus:
-            if komoditas_list:
-                kom_hapus = st.selectbox("Pilih komoditas", komoditas_list, key="hapus_kom")
-                if st.button("Hapus Komoditas"):
-                    df_kom = pd.read_csv(KOMODITAS_DB)
-                    df_kom = df_kom[df_kom['komoditas'] != kom_hapus]
-                    df_kom.to_csv(KOMODITAS_DB, index=False)
-                    df_ip = pd.read_csv(IPH_DB)
-                    df_ip = df_ip[df_ip['komoditas'] != kom_hapus]
-                    df_ip.to_csv(IPH_DB, index=False)
-                    st.session_state.reset_counter += 1
-                    st.rerun()
+                
+# ======================= INPUT REKAP IPH (Ringkasan: Indikator, Andil, Fluktuasi) =======================
+if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap IPH":
+    st.title("Input Rekap IPH Mingguan")
+    
+    tab1, tab2 = st.tabs(["Input Manual", "Import Excel"])
+    
+    # ========== TAB 1: INPUT MANUAL (KODE ASLI ANDA) ==========
+    with tab1:
+        # Inisialisasi key form untuk reset
+        if 'form_key' not in st.session_state:
+            st.session_state.form_key = 0
+        
+        # Ambil daftar komoditas master
+        komoditas_master = get_komoditas_list()
+        if not komoditas_master:
+            st.warning("Belum ada komoditas. Silakan tambah komoditas terlebih dahulu.")
+            with st.expander("Tambah Komoditas"):
+                kom_baru = st.text_input("Nama komoditas baru")
+                if st.button("Tambah"):
+                    if kom_baru and add_komoditas(kom_baru):
+                        st.rerun()
+            st.stop()
+        
+        # Tentukan default komoditas (3 komoditas pertama)
+        default_kom1 = komoditas_master[0]
+        default_kom2 = komoditas_master[1] if len(komoditas_master) > 1 else komoditas_master[0]
+        default_kom3 = komoditas_master[2] if len(komoditas_master) > 2 else komoditas_master[0]
+        default_fluk = komoditas_master[0]
+        
+        # Form dengan key dinamis
+        with st.form(key=f"iph_form_{st.session_state.form_key}"):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                tahun = st.number_input("Tahun", min_value=2020, max_value=2030, value=datetime.now().year)
+            with col2:
+                bulan = st.selectbox("Bulan", range(1,13), format_func=lambda x: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][x-1], index=datetime.now().month-1)
+            with col3:
+                minggu = st.number_input("Minggu ke-", min_value=1, max_value=5, value=1)
+            
+            # Indikator: text_input agar bebas desimal
+            indikator_str = st.text_input("Indikator Perubahan Harga (%)", value="0", help="Gunakan titik sebagai desimal (contoh: -1.34 atau 2.5678)")
+            
+            st.markdown("### Tiga Komoditas Andil Perubahan Harga")
+            col_kom1, col_kom2, col_kom3 = st.columns(3)
+            with col_kom1:
+                kom1 = st.selectbox("Komoditas 1", komoditas_master, index=komoditas_master.index(default_kom1))
+            with col_kom2:
+                kom2 = st.selectbox("Komoditas 2", komoditas_master, index=komoditas_master.index(default_kom2))
+            with col_kom3:
+                kom3 = st.selectbox("Komoditas 3", komoditas_master, index=komoditas_master.index(default_kom3))
+            
+            col_nil1, col_nil2, col_nil3 = st.columns(3)
+            with col_nil1:
+                nilai1_str = st.text_input(f"Nilai {kom1} (%)", value="0", help="Contoh: -0.773 atau 0.333")
+            with col_nil2:
+                nilai2_str = st.text_input(f"Nilai {kom2} (%)", value="0")
+            with col_nil3:
+                nilai3_str = st.text_input(f"Nilai {kom3} (%)", value="0")
+            
+            st.markdown("### Fluktuasi Harga Tertinggi")
+            col_fluk1, col_fluk2 = st.columns(2)
+            with col_fluk1:
+                fluk_kom = st.selectbox("Komoditas", komoditas_master, index=komoditas_master.index(default_fluk))
+            with col_fluk2:
+                fluk_nilai_str = st.text_input("Nilai Fluktuasi", value="0", help="Contoh: 0.0553 atau 0.0329914")
+            
+            submitted = st.form_submit_button("Simpan Data", type="primary", use_container_width=True)
+            
+            if submitted:
+                # Konversi string ke float (ganti koma dengan titik)
+                try:
+                    indikator = float(indikator_str.replace(',', '.'))
+                except:
+                    indikator = 0.0
+                try:
+                    nilai1 = float(nilai1_str.replace(',', '.'))
+                except:
+                    nilai1 = 0.0
+                try:
+                    nilai2 = float(nilai2_str.replace(',', '.'))
+                except:
+                    nilai2 = 0.0
+                try:
+                    nilai3 = float(nilai3_str.replace(',', '.'))
+                except:
+                    nilai3 = 0.0
+                try:
+                    fluk_nilai = float(fluk_nilai_str.replace(',', '.'))
+                except:
+                    fluk_nilai = 0.0
+                
+                analisis_file = "iph_analisis.csv"
+                # Baca existing data
+                if os.path.exists(analisis_file) and os.path.getsize(analisis_file) > 0:
+                    df_existing = pd.read_csv(analisis_file)
+                    # Hapus periode yang sama
+                    df_existing = df_existing[~((df_existing['tahun']==tahun) & (df_existing['bulan']==bulan) & (df_existing['minggu_ke']==minggu))]
+                else:
+                    df_existing = pd.DataFrame()
+                
+                # Data baru
+                new_data = pd.DataFrame([{
+                    'tahun': tahun,
+                    'bulan': bulan,
+                    'minggu_ke': minggu,
+                    'indikator': indikator,
+                    'komoditas_andil': f"{kom1}|{kom2}|{kom3}",
+                    'nilai_andil': f"{nilai1}|{nilai2}|{nilai3}",
+                    'fluktuasi_komoditas': fluk_kom,
+                    'fluktuasi_nilai': fluk_nilai,
+                    'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                }])
+                df_combined = pd.concat([df_existing, new_data], ignore_index=True)
+                df_combined.to_csv(analisis_file, index=False)
+                
+                # Notifikasi toast (akan muncul dan tidak langsung hilang karena rerun)
+                st.toast("✅ Data berhasil disimpan!", icon="✅")
+                # Reset form dengan mengubah key
+                st.session_state.form_key += 1
+                st.rerun()
+        
+        # Manajemen komoditas (sama seperti sebelumnya)
+        with st.expander("Kelola Daftar Komoditas"):
+            col_tambah, col_hapus = st.columns(2)
+            with col_tambah:
+                kom_baru = st.text_input("Nama komoditas baru", key="tambah_kom_iph")
+                if st.button("Tambah Komoditas", key="tambah_btn_iph"):
+                    if kom_baru and add_komoditas(kom_baru):
+                        st.toast(f"Komoditas {kom_baru} ditambahkan!", icon="✅")
+                        st.session_state.form_key += 1
+                        st.rerun()
+                    elif kom_baru:
+                        st.warning("Komoditas sudah ada.")
+            with col_hapus:
+                if komoditas_master:
+                    kom_hapus = st.selectbox("Pilih komoditas", komoditas_master, key="hapus_kom_iph")
+                    if st.button("Hapus Komoditas", key="hapus_btn_iph"):
+                        delete_komoditas(kom_hapus)
+                        st.toast(f"Komoditas {kom_hapus} dihapus!", icon="🗑️")
+                        st.session_state.form_key += 1
+                        st.rerun()
+                else:
+                    st.info("Tidak ada komoditas.")
+    
+    # ========== TAB 2: IMPORT EXCEL ==========
+    with tab2:
+        st.subheader("Import Data IPH dari Excel")
+        st.markdown("""
+        **Format file Excel yang diterima:**
+        File harus memiliki kolom dengan header berikut (huruf besar/kecil bebas):
+        - `Tahun` (angka, contoh: 2023)
+        - `Bulan` (teks nama bulan, contoh: Januari)
+        - `Minggu ke-` (angka 1-5)
+        - `Indikator Perubahan Harga (%)` (angka desimal)
+        - `Komoditas1`, `Nilai1`, `Komoditas2`, `Nilai2`, `Komoditas3`, `Nilai3`
+        - `Komoditas Fluktuasi`, `Nilai Fluktuasi`
+        
+        **Contoh data:**  
+        | Tahun | Bulan   | Minggu ke- | Indikator Perubahan Harga (%) | Komoditas1 | Nilai1 | Komoditas2 | Nilai2 | Komoditas3 | Nilai3 | Komoditas Fluktuasi | Nilai Fluktuasi |
+        |-------|---------|------------|-------------------------------|------------|--------|------------|--------|------------|--------|---------------------|-----------------|
+        | 2023  | Januari | 1          | -1.34                         | TELUR AYAM RAS | -0.773 | PISANG     | -0.333 | DAGING AYAM RAS | -0.287 | CABAI RAWIT         | 0.0553          |
+        """)
+        
+        # Download template
+        template_data = pd.DataFrame({
+            'Tahun': [2023],
+            'Bulan': ['Januari'],
+            'Minggu ke-': [1],
+            'Indikator Perubahan Harga (%)': [-1.34],
+            'Komoditas1': ['TELUR AYAM RAS'],
+            'Nilai1': [-0.773],
+            'Komoditas2': ['PISANG'],
+            'Nilai2': [-0.333],
+            'Komoditas3': ['DAGING AYAM RAS'],
+            'Nilai3': [-0.287],
+            'Komoditas Fluktuasi': ['CABAI RAWIT'],
+            'Nilai Fluktuasi': [0.0553]
+        })
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            template_data.to_excel(writer, index=False, sheet_name='Template')
+        excel_data = output.getvalue()
+        st.download_button(
+            label="📥 Download Template Excel",
+            data=excel_data,
+            file_name="template_iph.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+        
+        uploaded_file = st.file_uploader("Upload file Excel (.xlsx)", type=["xlsx"], key="import_excel")
+        if uploaded_file:
+            try:
+                df_input = pd.read_excel(uploaded_file)
+                df_input.columns = df_input.columns.str.strip()
+                # Mapping kolom yang diharapkan
+                kolom_map = {
+                    'Tahun': 'tahun',
+                    'Bulan': 'bulan_str',
+                    'Minggu ke-': 'minggu_ke',
+                    'Indikator Perubahan Harga (%)': 'indikator',
+                    'Komoditas1': 'kom1',
+                    'Nilai1': 'nilai1',
+                    'Komoditas2': 'kom2',
+                    'Nilai2': 'nilai2',
+                    'Komoditas3': 'kom3',
+                    'Nilai3': 'nilai3',
+                    'Komoditas Fluktuasi': 'fluk_kom',
+                    'Nilai Fluktuasi': 'fluk_nilai'
+                }
+                required_cols = list(kolom_map.keys())
+                missing = [c for c in required_cols if c not in df_input.columns]
+                if missing:
+                    st.error(f"Kolom yang hilang: {missing}. Pastikan file memiliki kolom sesuai template.")
+                else:
+                    df_input.rename(columns=kolom_map, inplace=True)
+                    # Konversi bulan teks ke angka
+                    bulan_map_teks = {
+                        'januari':1, 'februari':2, 'maret':3, 'april':4, 'mei':5, 'juni':6,
+                        'juli':7, 'agustus':8, 'september':9, 'oktober':10, 'november':11, 'desember':12
+                    }
+                    df_input['bulan_str'] = df_input['bulan_str'].astype(str).str.strip().str.lower()
+                    df_input['bulan'] = df_input['bulan_str'].map(bulan_map_teks)
+                    if df_input['bulan'].isna().any():
+                        invalid = df_input[df_input['bulan'].isna()]['bulan_str'].unique()
+                        st.error(f"Bulan tidak valid: {invalid}")
+                        st.stop()
+                    df_input.drop(columns=['bulan_str'], inplace=True)
+                    # Konversi ke numerik
+                    numeric_cols = ['tahun','minggu_ke','indikator','nilai1','nilai2','nilai3','fluk_nilai']
+                    for col in numeric_cols:
+                        df_input[col] = pd.to_numeric(df_input[col], errors='coerce')
+                    # Buat kolom komoditas_andil dan nilai_andil
+                    df_input['komoditas_andil'] = df_input['kom1'] + "|" + df_input['kom2'] + "|" + df_input['kom3']
+                    df_input['nilai_andil'] = df_input['nilai1'].astype(str) + "|" + df_input['nilai2'].astype(str) + "|" + df_input['nilai3'].astype(str)
+                    # Pilih kolom final
+                    df_output = df_input[['tahun','bulan','minggu_ke','indikator','komoditas_andil','nilai_andil','fluk_kom','fluk_nilai']].copy()
+                    df_output.rename(columns={'fluk_kom':'fluktuasi_komoditas', 'fluk_nilai':'fluktuasi_nilai'}, inplace=True)
+                    df_output['last_updated'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    # Gabung dengan data existing
+                    analisis_file = "iph_analisis.csv"
+                    if os.path.exists(analisis_file) and os.path.getsize(analisis_file) > 0:
+                        df_existing = pd.read_csv(analisis_file)
+                        for _, row in df_output.iterrows():
+                            t = row['tahun']
+                            b = row['bulan']
+                            m = row['minggu_ke']
+                            df_existing = df_existing[~((df_existing['tahun']==t) & (df_existing['bulan']==b) & (df_existing['minggu_ke']==m))]
+                        df_combined = pd.concat([df_existing, df_output], ignore_index=True)
+                    else:
+                        df_combined = df_output
+                    df_combined.to_csv(analisis_file, index=False)
+                    st.success(f"Berhasil mengimpor {len(df_output)} baris数据. Data periode yang sama telah diganti.")
+                    st.subheader("Preview data yang diimpor")
+                    st.dataframe(df_output, use_container_width=True)
+                    if st.button("Refresh halaman", use_container_width=True, key="refresh_import"):
+                        st.rerun()
+            except Exception as e:
+                st.error(f"Error membaca file: {e}")
 
 # ======================= VISUALISASI IPH =======================
 if menu == "Visualisasi IPH":
-    st.markdown("<h1 style='text-align: center;'>📊 Visualisasi Data IPH</h1>", unsafe_allow_html=True)
-    df_iph = pd.read_csv(IPH_DB)
-    if df_iph.empty:
-        st.warning("Belum ada data.")
+    st.markdown("<h1 style='text-align: center; font-family: Lexend;'>Visualisasi IPH</h1>", unsafe_allow_html=True)
+    analisis_file = "iph_analisis.csv"
+    if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
+        st.warning("Belum ada data. Silakan input data melalui menu Input Rekap IPH.")
+        st.stop()
+    
+    df = pd.read_csv(analisis_file)
+    bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
+    df['bulan_nama'] = df['bulan'].apply(lambda x: bulan_map[x])
+    
+    # Fungsi format angka tanpa batasan desimal
+    def format_angka(val):
+        if pd.isna(val):
+            return "NaN"
+        if val == int(val):
+            return str(int(val))
+        s = f"{val:.10f}".rstrip('0').rstrip('.')
+        return s
+    
+# ------------------------------------------------------------
+    # GRAFIK IPH: ULTIMATE AESTHETIC (VERSI BERKELAS)
+    # ------------------------------------------------------------
+    st.subheader("Tren Indikator Perubahan Harga (%)")
+    
+    tahun_list = sorted(df['tahun'].unique())
+    tahun_iph = st.multiselect("Pilih Tahun Analisis", tahun_list, default=tahun_list, key="iph_ultra_final")
+
+    if tahun_iph:
+        from plotly.subplots import make_subplots
+        import plotly.graph_objects as go
+
+        df_plot = df[df['tahun'].isin(tahun_iph)].copy()
+        
+# 1. SETUP JUDUL (GANTI: Tambah tag <b> agar Bold)
+        judul_dalam = ""
+        if not df_plot.empty:
+            min_th, max_th = df_plot['tahun'].min(), df_plot['tahun'].max()
+            start_bln = bulan_map.get(df_plot[df_plot['tahun'] == min_th]['bulan'].min(), "")
+            end_bln = bulan_map.get(df_plot[df_plot['tahun'] == max_th]['bulan'].max(), "")
+            # Teks dibungkus <b> agar Bold
+            judul_dalam = f"<b>Indikator Perubahan Harga (%) per minggu, {start_bln} {min_th} - {end_bln} {max_th}</b>"
+
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD']
+
+        for i, th in enumerate(tahun_iph):
+            df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
+            if not df_th.empty:
+                x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
+                is_giant = df_th['indikator'].abs().max() > 100
+
+                fig.add_trace(
+                    go.Scatter(
+                        x=x_vals,
+                        y=df_th['indikator'],
+                        mode='lines+markers',
+                        name=f"<b>{th}</b>", # GANTI: Nama tahun di legenda jadi Bold
+                        line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
+                        marker=dict(size=8, line=dict(width=1.5, color='white')),
+                        connectgaps=True,
+                        hovertemplate=f"<b>Tahun {th}</b><br>Minggu %{{x}}<br>IPH: %{{y}}%<extra></extra>"
+                    ),
+                    secondary_y=is_giant
+                )
+
+        # 2. UPDATE LAYOUT (GANTI: Tambah font family Lexend & Bold)
+        fig.update_layout(
+            height=500,
+            # Font Global pakai Lexend
+            font=dict(family="Lexend, sans-serif"), 
+            margin=dict(t=100, b=50, l=60, r=60),
+            plot_bgcolor='white',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h", 
+                yanchor="bottom", y=1.02, 
+                xanchor="right", x=1,
+                font=dict(size=12, family="Lexend") # Font Legenda
+            ),
+            annotations=[
+                dict(
+                    text=judul_dalam,
+                    xref="paper", yref="paper",
+                    x=0, y=1.1, 
+                    showarrow=False,
+                    # GANTI: Font size sedikit lebih besar & warna lebih gelap (Lexend)
+                    font=dict(size=16, color="#333333", family="Lexend"),
+                    align="left"
+                )
+            ]
+        )
+        
+        # Tambahan: Pastikan sumbu X & Y juga pakai Lexend
+        fig.update_xaxes(tickfont=dict(family="Lexend"), range=[0.8, 12.8])
+        fig.update_yaxes(tickfont=dict(family="Lexend"), secondary_y=False)
+
+        # Sumbu X: Fix Desember agar M-4 tidak kepotong
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=list(range(1, 13)),
+            ticktext=['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+            range=[0.8, 12.8], # Memberikan ruang napas di ujung Desember
+            showgrid=True,
+            gridcolor='#F0F0F0',
+            zeroline=False
+        )
+
+        # Sumbu Y: Skala utama di Kiri
+        fig.update_yaxes(
+            title_text=None, 
+            secondary_y=False, 
+            showgrid=True, 
+            gridcolor='#F0F0F0',
+            tickformat=',.2f' # Format angka dua desimal
+        )
+        fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
+
+        st.plotly_chart(fig, use_container_width=True)
+
+        # Tabel Detail di Bawahnya
+        st.write("**Data Detail Mingguan:**")
+        try:
+            df_table = df_plot.pivot_table(
+                index='tahun', columns=['bulan', 'minggu_ke'], values='indikator'
+            ).round(2)
+            df_table.columns = [f"{bulan_map.get(b, b)} M{int(m)}" for b, m in df_table.columns]
+            st.dataframe(df_table, use_container_width=True)
+        except:
+            pass
     else:
-        bulan_map = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"Mei", 6:"Jun", 7:"Jul", 8:"Agu", 9:"Sep", 10:"Okt", 11:"Nov", 12:"Des"}
+        st.info("Pilih minimal satu tahun.")
+    
+    # ------------------------------------------------------------
+    # GRAFIK ANDIL KOMODITAS
+    # ------------------------------------------------------------
+    st.subheader("Komoditas Paling Sering Menjadi Andil Perubahan Harga")
+    tahun_andil_multi = st.multiselect("Pilih Tahun untuk Andil Komoditas", tahun_list, default=[tahun_list[-1]], key="andil_year_multiselect")
+    if not tahun_andil_multi:
+        st.info("Pilih minimal satu tahun.")
+    else:
+        # Kumpulkan frekuensi per tahun
+        freq_dict = {}
+        for th in tahun_andil_multi:
+            df_th = df[df['tahun'] == th]
+            freq = {}
+            for _, row in df_th.iterrows():
+                kom_list = row['komoditas_andil'].split("|")
+                for kom in kom_list:
+                    kom = kom.strip().upper()
+                    freq[kom] = freq.get(kom, 0) + 1
+            freq_dict[th] = freq
         
-        # Pilihan visualisasi utama
-        jenis_grafik = st.selectbox("Pilih Jenis Analisis Grafik:", [
-            "Tren Harga (Bulanan/Mingguan)",
-            "Andil Perubahan Harga (Frekuensi)",
-            "Komoditas Paling Fluktuatif",
-            "Indikator Perubahan Harga (%)"
-        ])
-        
-        # Inisialisasi share_params (akan diisi nanti)
-        share_params = {"view": "shared", "chart": jenis_grafik}
-        
-        if jenis_grafik == "Tren Harga (Bulanan/Mingguan)":
-            mode = st.radio("Pilih Level Tampilan:", ["Bulanan (Perbandingan Tahun)", "Mingguan (Detail Harga Asli)"], horizontal=True)
-            share_params["mode"] = mode
-            if mode == "Bulanan (Perbandingan Tahun)":
-                col1, col2 = st.columns(2)
-                with col1:
-                    kom_all = sorted(df_iph['komoditas'].unique())
-                    default_kom = kom_all[:3] if len(kom_all) >= 3 else kom_all
-                    kom_pilih = st.multiselect("Pilih Komoditas", kom_all, default=default_kom)
-                with col2:
-                    th_all = sorted(df_iph['tahun'].unique(), reverse=True)
-                    default_th = th_all[:1] if th_all else []
-                    th_pilih = st.multiselect("Pilih Tahun", th_all, default=default_th)
-                # Simpan untuk share link
-                share_params["th"] = th_pilih[0] if th_pilih else (th_all[0] if th_all else 2024)
-                share_params["bl"] = 1
-                share_params["mg"] = 1
-                share_params["kom"] = "|".join(kom_pilih)
-                share_params["thn"] = "|".join(map(str, th_pilih))
-                
-                if kom_pilih and th_pilih:
-                    plot_df = df_iph[(df_iph['komoditas'].isin(kom_pilih)) & (df_iph['tahun'].isin(th_pilih))]
-                    if not plot_df.empty:
-                        plot_df = plot_df.groupby(['tahun', 'bulan', 'komoditas'])['harga'].mean().reset_index()
-                        plot_df['legenda'] = plot_df['tahun'].astype(str) + " - " + plot_df['komoditas']
-                        tab_pivot = plot_df.pivot_table(index='legenda', columns='bulan', values='harga').reset_index()
-                        for b in range(1,13):
-                            if b not in tab_pivot.columns:
-                                tab_pivot[b] = None
-                        tab_pivot = tab_pivot[['legenda'] + list(range(1,13))]
-                        def format_ribuan(x):
-                            if pd.isna(x): return ""
-                            return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
-                        header_values = ['<b>Tahun / Komoditas</b>'] + [f"<b>{bulan_map[i]}</b>" for i in range(1,13)]
-                        cell_values = [tab_pivot['legenda'].tolist()]
-                        for b in range(1,13):
-                            cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
-                        n_items = len(tab_pivot)
-                        graph_height = max(600, 400 + n_items * 20)
-                        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05,
-                                            row_heights=[0.6, 0.4], specs=[[{"type": "scatter"}], [{"type": "table"}]])
-                        for leg in tab_pivot['legenda']:
-                            data_leg = plot_df[plot_df['legenda'] == leg].sort_values('bulan')
-                            fig.add_trace(go.Scatter(x=data_leg['bulan'], y=data_leg['harga'],
-                                                     mode='lines+markers', line=dict(width=2), name=leg), row=1, col=1)
-                        fig.add_trace(go.Table(header=dict(values=header_values, fill_color='#1e3a8a',
-                                                           font=dict(color='white', size=12), align='center'),
-                                               cells=dict(values=cell_values, fill_color='white',
-                                                          align=['left'] + ['center']*12, height=25)), row=2, col=1)
-                        fig.update_layout(title="<b>Tren Harga Rata-rata Bulanan</b>", height=graph_height,
-                                          margin=dict(l=20, r=150, t=60, b=80), plot_bgcolor='white',
-                                          legend=dict(orientation="v", yanchor="top", y=1.0, xanchor="left", x=1.02,
-                                                      bgcolor="rgba(255,255,255,0.8)", bordercolor="lightgray", borderwidth=1))
-                        fig.update_xaxes(tickmode='array', tickvals=list(range(1,13)), ticktext=list(bulan_map.values()),
-                                         showgrid=True, gridcolor='lightgray', row=1, col=1)
-                        fig.update_yaxes(title="Harga (Rp)", showgrid=True, gridcolor='lightgray', row=1, col=1)
-                        st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.warning("Tidak ada data untuk pilihan ini.")
-            else:  # Mingguan
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    th_s = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="th_s_minggu")
-                with col2:
-                    bl_s = st.selectbox("Bulan", sorted(df_iph[df_iph['tahun']==th_s]['bulan'].unique()), format_func=lambda x: bulan_map[x], key="bl_s_minggu")
-                with col3:
-                    k_all = sorted(df_iph['komoditas'].unique())
-                    k_m = st.multiselect("Komoditas", k_all, default=k_all[:3] if k_all else [], key="k_m_minggu")
-                minggu_tersedia = sorted(df_iph[(df_iph['tahun']==th_s) & (df_iph['bulan']==bl_s)]['minggu_ke'].unique())
-                minggu_pilih = st.multiselect("Pilih Minggu ke-", minggu_tersedia, default=minggu_tersedia, key="minggu_pilih")
-                share_params["th"] = th_s
-                share_params["bl"] = bl_s
-                share_params["mg"] = minggu_pilih[0] if minggu_pilih else 1
-                share_params["th_s"] = th_s
-                share_params["bl_s"] = bl_s
-                share_params["kom"] = "|".join(k_m)
-                share_params["mg_pilih"] = "|".join(map(str, minggu_pilih))
-                if k_m and minggu_pilih:
-                    plot_df = df_iph[(df_iph['tahun']==th_s) & (df_iph['bulan']==bl_s) & (df_iph['komoditas'].isin(k_m)) & (df_iph['minggu_ke'].isin(minggu_pilih))]
-                    if not plot_df.empty:
-                        fig = px.line(plot_df, x='minggu_ke', y='harga', color='komoditas', markers=True,
-                                      title=f"Harga Asli Mingguan ({bulan_map[bl_s]} {th_s})")
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.write("**Tabel Harga Asli (Rp):**")
-                        tab_m = plot_df.pivot_table(index='komoditas', columns='minggu_ke', values='harga', fill_value=0)
-                        st.dataframe(tab_m, use_container_width=True)
-                    else:
-                        st.warning("Tidak ada data.")
-        
-        elif jenis_grafik == "Andil Perubahan Harga (Frekuensi)":
-            df_iph['persen_change'] = pd.to_numeric(df_iph['persen_change'], errors='coerce').fillna(0)
-            andil_df = df_iph[df_iph['persen_change'] != 0].groupby('komoditas').size().reset_index(name='frekuensi')
-            if not andil_df.empty:
-                andil_df = andil_df.sort_values('frekuensi', ascending=False)
-                fig = px.bar(andil_df, x='frekuensi', y='komoditas', orientation='h', title="Frekuensi Perubahan Harga", text='frekuensi')
-                fig.update_traces(textposition='outside')
-                st.plotly_chart(fig, use_container_width=True)
-                st.dataframe(andil_df.set_index('komoditas'), use_container_width=True)
-            else:
-                st.info("Belum ada data perubahan harga.")
-            share_params["th"] = df_iph['tahun'].max()
-            share_params["bl"] = 1
-            share_params["mg"] = 1
-        
-        elif jenis_grafik == "Komoditas Paling Fluktuatif":
-            fluktuasi = df_iph.groupby('komoditas')['harga'].std().reset_index(name='std_dev')
-            fluktuasi = fluktuasi.sort_values('std_dev', ascending=False).head(5)
-            fig = px.bar(fluktuasi, x='komoditas', y='std_dev', title="Top 5 Komoditas Paling Fluktuatif", text='std_dev')
-            fig.update_traces(textposition='outside')
-            st.plotly_chart(fig, use_container_width=True)
-            st.dataframe(fluktuasi.set_index('komoditas'), use_container_width=True)
-            share_params["th"] = df_iph['tahun'].max()
-            share_params["bl"] = 1
-            share_params["mg"] = 1
-        
-        elif jenis_grafik == "Indikator Perubahan Harga (%)":
-            th_p = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="th_p_ind")
-            k_p = st.multiselect("Pilih Komoditas", sorted(df_iph['komoditas'].unique()), default=sorted(df_iph['komoditas'].unique())[:2], key="k_p_ind")
-            share_params["th"] = th_p
-            share_params["bl"] = 1
-            share_params["mg"] = 1
-            share_params["th_p"] = th_p
-            share_params["kom"] = "|".join(k_p)
-            if k_p:
-                ind_df = df_iph[(df_iph['tahun']==th_p) & (df_iph['komoditas'].isin(k_p))].sort_values(['bulan', 'minggu_ke'])
-                ind_df['periode'] = ind_df.apply(lambda x: f"{bulan_map[x['bulan']]} M{x['minggu_ke']}", axis=1)
-                fig = px.line(ind_df, x='periode', y='persen_change', color='komoditas', markers=True, title="Perubahan Harga (%)")
-                fig.add_hline(y=0, line_dash="dash", line_color="red")
-                st.plotly_chart(fig, use_container_width=True)
-                tab_persen = ind_df.pivot_table(index='komoditas', columns='periode', values='persen_change', fill_value=0)
-                st.dataframe(tab_persen, use_container_width=True)
-        
-        # --- Tampilkan link share di bagian bawah ---
-        st.markdown("---")
-        st.markdown("### 🔗 Bagikan Tampilan Ini")
+        # Semua komoditas unik
+        all_kom = set()
+        for f in freq_dict.values():
+            all_kom.update(f.keys())
+        data = []
+        for kom in all_kom:
+            row = {'Komoditas': kom}
+            for th in tahun_andil_multi:
+                row[str(th)] = freq_dict[th].get(kom, 0)
+            data.append(row)
+        df_plot = pd.DataFrame(data)
+        df_plot['Total'] = df_plot[[str(th) for th in tahun_andil_multi]].sum(axis=1)
+        df_plot = df_plot.sort_values('Total', ascending=False)
+        top5 = df_plot.head(5)['Komoditas'].tolist()
+        df_top = df_plot[df_plot['Komoditas'].isin(top5)]
+        # Urutkan berdasarkan total agar batang tertinggi di kiri
+        df_top = df_top.sort_values('Total', ascending=False)
+        df_melt = df_top.melt(id_vars=['Komoditas'], value_vars=[str(th) for th in tahun_andil_multi],
+                              var_name='Tahun', value_name='Frekuensi')
+        df_melt['Komoditas'] = pd.Categorical(df_melt['Komoditas'], categories=top5, ordered=True)
+        df_melt = df_melt.sort_values('Komoditas')
+        pastel_colors = ['#FDCB6E', '#6AB0DE', '#8CCB7E', '#F2A77C', '#C5A4D6', '#F4B8B8', '#B8D4E3']
+        fig_bar = px.bar(df_melt, x='Komoditas', y='Frekuensi', color='Tahun', barmode='group',
+                         title="5 Besar Komoditas Andil Perubahan Harga",
+                         labels={'Frekuensi':'Jumlah Kemunculan'},
+                         color_discrete_sequence=pastel_colors)
+        fig_bar.update_traces(
+            textposition='outside',
+            marker=dict(line=dict(width=1, color='white'), cornerradius=10),
+            opacity=0.9,
+            textfont_size=12,
+            textfont_family="Lexend"
+        )
+        fig_bar.update_layout(
+            font_family="Lexend",
+            xaxis_tickangle=0,
+            plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(showgrid=False),
+            yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
+    
+    # ------------------------------------------------------------
+    # LINK SHARE
+    # ------------------------------------------------------------
+    st.markdown("---")
+    with st.expander("🔗 Bagikan Tampilan Ini"):
         base_url = "https://dashboard-iph-kota-batu-cwg5au63betgavnrt2lmpk.streamlit.app"
         import urllib.parse
-        query_string = urllib.parse.urlencode(share_params, doseq=True)
-        share_link = f"{base_url}/?{query_string}"
-        st.info("Salin link di bawah untuk membagikan laporan ini tanpa perlu login.")
-        st.code(share_link, language="text")
+        
+        # Mengubah list tahun [2023, 2024] jadi string "2023|2024"
+        th_iph_str = "|".join(map(str, tahun_iph)) if tahun_iph else ""
+        th_andil_str = "|".join(map(str, tahun_andil_multi)) if tahun_andil_multi else ""
+        
+        share_params = {
+            "view": "shared"
+        }
 
+        query_string = urllib.parse.urlencode(share_params)
+        full_link = f"{base_url}/?{query_string}"
+        
+        st.info("Salin link di bawah untuk membagikan laporan ini.")
+        st.code(full_link, language="text")
+        
 # ======================= ANALISIS IPH OTOMATIS =======================
 if menu == "Analisis IPH":
-    st.title("📊 Analisis IPH Otomatis")
-    df_iph = pd.read_csv(IPH_DB)
-    if df_iph.empty:
-        st.warning("Belum ada data IPH.")
-    else:
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            tahun_list = sorted(df_iph['tahun'].unique())
-            tahun_pilih = st.selectbox("Tahun", tahun_list, index=len(tahun_list)-1 if tahun_list else 0)
-        with col2:
-            bulan_list = sorted(df_iph[df_iph['tahun']==tahun_pilih]['bulan'].unique())
-            bulan_pilih = st.selectbox("Bulan", bulan_list, format_func=lambda x: ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][x-1]) if bulan_list else None
-        with col3:
-            if bulan_pilih:
-                minggu_list = sorted(df_iph[(df_iph['tahun']==tahun_pilih) & (df_iph['bulan']==bulan_pilih)]['minggu_ke'].unique())
-                minggu_pilih = st.selectbox("Minggu ke-", minggu_list, index=len(minggu_list)-1 if minggu_list else 0)
-            else:
-                minggu_pilih = None
-        if bulan_pilih and minggu_pilih:
-            ringkasan = generate_ringkasan_indikator(tahun_pilih, bulan_pilih, minggu_pilih, df_iph)
-            st.subheader("📝 Ringkasan Indikator")
-            st.code(ringkasan, language='text')
-            st.markdown("---")
-            st.subheader("📈 Indikator Ringkasan")
-            data_periode = df_iph[(df_iph['tahun']==tahun_pilih) & (df_iph['bulan']==bulan_pilih) & (df_iph['minggu_ke']==minggu_pilih)]
-            max_harga = data_periode['harga'].max()
-            min_harga = data_periode['harga'].min()
-            komoditas_max = data_periode[data_periode['harga']==max_harga]['komoditas'].iloc[0]
-            komoditas_min = data_periode[data_periode['harga']==min_harga]['komoditas'].iloc[0]
-            col_a, col_b = st.columns(2)
-            with col_a:
-                st.metric("Harga Tertinggi", f"Rp {max_harga:,.2f}", delta=f"{komoditas_max}")
-                st.metric("Harga Terendah", f"Rp {min_harga:,.2f}", delta=f"{komoditas_min}")
-            with col_b:
-                st.metric("Rata-rata Harga", f"Rp {data_periode['harga'].mean():,.2f}")
-                st.metric("Disparitas Harga", f"Rp {max_harga - min_harga:,.2f}")
-
-# ======================= PUBLIK: LIHAT RAPAT =======================
-if st.session_state.user_role == "Publik" and menu == "Lihat Rapat":
-    st.title("Daftar Rapat TPID")
-    df_rapat = pd.read_csv(RAPAT_DB)
-    if df_rapat.empty:
-        st.info("Belum ada rapat.")
-    else:
-        for _, row in df_rapat.iterrows():
-            with st.expander(f"Rapat {row['tanggal']}"):
-                st.markdown(f"**Pegawai:** {row['pegawai']}")
-                st.markdown(f"**Undangan:** [Link]({row['link_undangan']})" if row['link_undangan'] else "")
-                st.markdown(f"**Bahan:** [Link]({row['link_bahan_materi']})" if row['link_bahan_materi'] else "")
-                st.markdown(f"**Dokumentasi:** [Link]({row['link_dokumentasi']})" if row['link_dokumentasi'] else "")
-                st.markdown(f"**Ringkasan:** {row['ringkasan_indikator']}")
-                st.markdown(f"**Resume:** {row['resume']}")
-                st.markdown(f"**Action Items:** {row['action_items']}")
+    st.title("Analisis IPH Ringkasan")
+    analisis_file = "iph_analisis.csv"
+    
+    if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
+        st.warning("Belum ada data ringkasan IPH. Silakan input melalui menu Input Rekap IPH.")
+        st.stop()
+    
+    df = pd.read_csv(analisis_file)
+    bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        tahun_list = sorted(df['tahun'].unique())
+        tahun_pilih = st.selectbox("Tahun", tahun_list, index=len(tahun_list)-1)
+    with col2:
+        df_tahun = df[df['tahun'] == tahun_pilih]
+        bulan_list = sorted(df_tahun['bulan'].unique())
+        bulan_pilih = st.selectbox("Bulan", bulan_list, format_func=lambda x: bulan_map[x])
+    with col3:
+        df_bulan = df_tahun[df_tahun['bulan'] == bulan_pilih]
+        minggu_list = sorted(df_bulan['minggu_ke'].unique())
+        minggu_pilih = st.selectbox("Minggu ke-", minggu_list, index=len(minggu_list)-1)
+    
+    # Panggil fungsi baru (3 parameter)
+    teks_ringkasan = generate_ringkasan_indikator(tahun_pilih, bulan_pilih, minggu_pilih)
+    
+    st.subheader("Ringkasan Indikator")
+    st.code(teks_ringkasan, language='text')
+    
+    # Tombol download untuk memudahkan copy
+    st.download_button(
+        label="📋 Salin Teks (Download .txt)",
+        data=teks_ringkasan,
+        file_name=f"ringkasan_iph_{tahun_pilih}_{bulan_map[bulan_pilih]}_minggu{minggu_pilih}.txt",
+        mime="text/plain"
+    )
