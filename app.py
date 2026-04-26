@@ -88,7 +88,7 @@ st.markdown("""
             font-weight: 600;
         }
         .notif-badge {
-            background: #EF4444;
+            background: #F97316;
             color: white;
             border-radius: 30px;
             padding: 2px 8px;
