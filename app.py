@@ -1215,6 +1215,10 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                 minggu_rapat = get_minggu_dari_tanggal(tanggal)
                 ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat)
                 df = pd.read_csv(RAPAT_DB)
+                teks_cols = ['ringkasan_indikator', 'resume', 'action_items', 'gambar_dokumentasi', 'status', 'last_editor', 'created_by', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi', 'pegawai']
+                for col in teks_cols:
+                    if col in df.columns:
+                        df[col] = df[col].fillna('').astype(str)
                 new_id = len(df) + 1 if not df.empty else 1
                 new_row = pd.DataFrame([{
                     "id": new_id, "tanggal": tanggal, "pegawai": " || ".join(pegawai_terpilih),
