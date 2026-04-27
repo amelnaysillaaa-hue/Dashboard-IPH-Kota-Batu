@@ -15,6 +15,7 @@ import tempfile
 import urllib.request
 import re
 
+
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
     page_title="Dashboard IPH Kota Batu",
@@ -968,7 +969,7 @@ if st.session_state.user_role == "Publik_Shared":
                      range=[min(tickvals)-0.5, max(tickvals)+0.5] if tickvals else [0,1],
                      showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
     fig.update_yaxes(showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width='stretch', theme=None)
     
     # Tabel detail
     st.write("**Data Detail Mingguan:**")
@@ -997,11 +998,11 @@ if st.session_state.user_role == "Publik_Shared":
         fig_bar = px.bar(df_bar, x='Komoditas', y='Frekuensi',
                          title="5 Besar Komoditas Andil Perubahan Harga (Semua Tahun)",
                          color_discrete_sequence=['#FDCB6E'])
-        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white'), cornerradius=10),
+        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white')), 
                               textposition='outside', textfont_size=12, textfont_family="Lexend")
         fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
                               xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch', theme=None)
     else:
         st.info("Belum ada data andil.")
     
@@ -1856,7 +1857,7 @@ if menu == "Visualisasi IPH":
         )
         fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
 
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width='stretch', theme=None)
 
         # Tabel Detail di Bawahnya
         st.write("**Data Detail Mingguan:**")
@@ -1919,7 +1920,7 @@ if menu == "Visualisasi IPH":
                          color_discrete_sequence=pastel_colors)
         fig_bar.update_traces(
             textposition='outside',
-            marker=dict(line=dict(width=1, color='white'), cornerradius=10),
+            marker=dict(line=dict(width=1, color='white')),
             opacity=0.9,
             textfont_size=12,
             textfont_family="Lexend"
@@ -1931,7 +1932,7 @@ if menu == "Visualisasi IPH":
             xaxis=dict(showgrid=False),
             yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
         )
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.plotly_chart(fig_bar, width='stretch', theme=None)
     
     # ------------------------------------------------------------
     # LINK SHARE
