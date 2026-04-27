@@ -1758,22 +1758,10 @@ if menu == "Visualisasi IPH":
         s = f"{val:.10f}".rstrip('0').rstrip('.')
         return s
     
-    # ------------------------------------------------------------
+# ------------------------------------------------------------
     # GRAFIK IPH: ULTIMATE AESTHETIC (VERSI BERKELAS)
     # ------------------------------------------------------------
     st.subheader("Tren Indikator Perubahan Harga (%)")
-    
-    # === PERBAIKAN MULAI DI SINI ===
-    # Pastikan kolom indikator numerik
-    if df['indikator'].dtype == object:
-        # Ganti koma menjadi titik dan konversi ke float, abaikan yang gagal
-        df['indikator'] = pd.to_numeric(df['indikator'].astype(str).str.replace(',', '.'), errors='coerce')
-        st.caption("ℹ️ Kolom indikator telah dikonversi menjadi numerik (tanda koma diganti titik).")
-    
-    # Debug: tampilkan info singkat tentang data (hapus nanti jika sudah berhasil)
-    st.write("Jumlah baris data:", df.shape[0])
-    st.write("Tahun yang tersedia:", df['tahun'].unique())
-    st.write("Contoh tipe data indikator:", df['indikator'].dtype)
     
     tahun_list = sorted(df['tahun'].unique())
     tahun_iph = st.multiselect("Pilih Tahun Analisis", tahun_list, default=tahun_list, key="iph_ultra_final")
@@ -1784,30 +1772,21 @@ if menu == "Visualisasi IPH":
 
         df_plot = df[df['tahun'].isin(tahun_iph)].copy()
         
-        # Debug: pastikan df_plot tidak kosong
-        if df_plot.empty:
-            st.warning("Tidak ada data untuk tahun yang dipilih.")
-            st.stop()
-        
-        # Jika kolom indikator masih ada yang NaN setelah konversi, isi dengan 0 atau abaikan
-        df_plot['indikator'] = df_plot['indikator'].fillna(0)
-        
-        # 1. SETUP JUDUL (GANTI: Tambah tag <b> agar Bold)
+# 1. SETUP JUDUL (GANTI: Tambah tag <b> agar Bold)
         judul_dalam = ""
         if not df_plot.empty:
             min_th, max_th = df_plot['tahun'].min(), df_plot['tahun'].max()
             start_bln = bulan_map.get(df_plot[df_plot['tahun'] == min_th]['bulan'].min(), "")
             end_bln = bulan_map.get(df_plot[df_plot['tahun'] == max_th]['bulan'].max(), "")
+            # Teks dibungkus <b> agar Bold
             judul_dalam = f"<b>Indikator Perubahan Harga (%) per minggu, {start_bln} {min_th} - {end_bln} {max_th}</b>"
 
-        try:
-            fig = make_subplots(specs=[[{"secondary_y": True}]])
-            colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD']
+        fig = make_subplots(specs=[[{"secondary_y": True}]])
+        colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD']
 
-            for i, th in enumerate(tahun_iph):
-                df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
-                if df_th.empty:
-                    continue
+        for i, th in enumerate(tahun_iph):
+            df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
+            if not df_th.empty:
                 x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
                 is_giant = df_th['indikator'].abs().max() > 100
 
@@ -1816,7 +1795,7 @@ if menu == "Visualisasi IPH":
                         x=x_vals,
                         y=df_th['indikator'],
                         mode='lines+markers',
-                        name=f"<b>{th}</b>",
+                        name=f"<b>{th}</b>", # GANTI: Nama tahun di legenda jadi Bold
                         line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
                         marker=dict(size=8, line=dict(width=1.5, color='white')),
                         connectgaps=True,
@@ -1825,71 +1804,72 @@ if menu == "Visualisasi IPH":
                     secondary_y=is_giant
                 )
 
-            # 2. UPDATE LAYOUT
-            fig.update_layout(
-                height=500,
-                font=dict(family="Lexend, sans-serif"),
-                margin=dict(t=100, b=50, l=60, r=60),
-                plot_bgcolor='white',
-                hovermode='x unified',
-                legend=dict(
-                    orientation="h",
-                    yanchor="bottom", y=1.02,
-                    xanchor="right", x=1,
-                    font=dict(size=12, family="Lexend")
-                ),
-                annotations=[
-                    dict(
-                        text=judul_dalam,
-                        xref="paper", yref="paper",
-                        x=0, y=1.1,
-                        showarrow=False,
-                        font=dict(size=16, color="#333333", family="Lexend"),
-                        align="left"
-                    )
-                ]
-            )
-            
-            fig.update_xaxes(tickfont=dict(family="Lexend"), range=[0.8, 12.8])
-            fig.update_yaxes(tickfont=dict(family="Lexend"), secondary_y=False)
+        # 2. UPDATE LAYOUT (GANTI: Tambah font family Lexend & Bold)
+        fig.update_layout(
+            height=500,
+            # Font Global pakai Lexend
+            font=dict(family="Lexend, sans-serif"), 
+            margin=dict(t=100, b=50, l=60, r=60),
+            plot_bgcolor='white',
+            hovermode='x unified',
+            legend=dict(
+                orientation="h", 
+                yanchor="bottom", y=1.02, 
+                xanchor="right", x=1,
+                font=dict(size=12, family="Lexend") # Font Legenda
+            ),
+            annotations=[
+                dict(
+                    text=judul_dalam,
+                    xref="paper", yref="paper",
+                    x=0, y=1.1, 
+                    showarrow=False,
+                    # GANTI: Font size sedikit lebih besar & warna lebih gelap (Lexend)
+                    font=dict(size=16, color="#333333", family="Lexend"),
+                    align="left"
+                )
+            ]
+        )
+        
+        # Tambahan: Pastikan sumbu X & Y juga pakai Lexend
+        fig.update_xaxes(tickfont=dict(family="Lexend"), range=[0.8, 12.8])
+        fig.update_yaxes(tickfont=dict(family="Lexend"), secondary_y=False)
 
-            fig.update_xaxes(
-                tickmode='array',
-                tickvals=list(range(1, 13)),
-                ticktext=['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
-                range=[0.8, 12.8],
-                showgrid=True,
-                gridcolor='#F0F0F0',
-                zeroline=False
-            )
+        # Sumbu X: Fix Desember agar M-4 tidak kepotong
+        fig.update_xaxes(
+            tickmode='array',
+            tickvals=list(range(1, 13)),
+            ticktext=['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+            range=[0.8, 12.8], # Memberikan ruang napas di ujung Desember
+            showgrid=True,
+            gridcolor='#F0F0F0',
+            zeroline=False
+        )
 
-            fig.update_yaxes(
-                title_text=None,
-                secondary_y=False,
-                showgrid=True,
-                gridcolor='#F0F0F0',
-                tickformat=',.2f'
-            )
-            fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
+        # Sumbu Y: Skala utama di Kiri
+        fig.update_yaxes(
+            title_text=None, 
+            secondary_y=False, 
+            showgrid=True, 
+            gridcolor='#F0F0F0',
+            tickformat=',.2f' # Format angka dua desimal
+        )
+        fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
 
-            st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True)
 
-            # Tabel Detail di Bawahnya
-            st.write("**Data Detail Mingguan:**")
-            try:
-                df_table = df_plot.pivot_table(
-                    index='tahun', columns=['bulan', 'minggu_ke'], values='indikator'
-                ).round(2)
-                df_table.columns = [f"{bulan_map.get(b, b)} M{int(m)}" for b, m in df_table.columns]
-                st.dataframe(df_table, use_container_width=True)
-            except:
-                pass
-        except Exception as e:
-            st.error(f"Gagal membuat grafik: {e}")
-            st.write("Data yang digunakan:", df_plot.head())
+        # Tabel Detail di Bawahnya
+        st.write("**Data Detail Mingguan:**")
+        try:
+            df_table = df_plot.pivot_table(
+                index='tahun', columns=['bulan', 'minggu_ke'], values='indikator'
+            ).round(2)
+            df_table.columns = [f"{bulan_map.get(b, b)} M{int(m)}" for b, m in df_table.columns]
+            st.dataframe(df_table, use_container_width=True)
+        except:
+            pass
     else:
         st.info("Pilih minimal satu tahun.")
-
     
     # ------------------------------------------------------------
     # GRAFIK ANDIL KOMODITAS
