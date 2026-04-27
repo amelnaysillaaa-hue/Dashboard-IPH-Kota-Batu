@@ -15,9 +15,6 @@ import tempfile
 import urllib.request
 import re
 
-import plotly.graph_objects as go
-fig = go.Figure(data=go.Scatter(x=[1,2,3], y=[1,2,3]))
-st.plotly_chart(fig, use_container_width=True)
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -1792,7 +1789,7 @@ if menu == "Visualisasi IPH":
             df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
             if not df_th.empty:
                 x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
-                is_giant = df_th['indikator'].abs().max() > 1000000
+                is_giant = df_th['indikator'].abs().max() > 1000
 
                 fig.add_trace(
                     go.Scatter(
