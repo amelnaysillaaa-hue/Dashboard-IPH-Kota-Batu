@@ -1762,6 +1762,7 @@ if menu == "Visualisasi IPH":
     # GRAFIK IPH: ULTIMATE AESTHETIC (VERSI BERKELAS)
     # ------------------------------------------------------------
     st.subheader("Tren Indikator Perubahan Harga (%)")
+    st.write("Data yang akan diplot:", df_plot[['tahun', 'bulan', 'minggu_ke', 'indikator']].head(10))
     
     tahun_list = sorted(df['tahun'].unique())
     tahun_iph = st.multiselect("Pilih Tahun Analisis", tahun_list, default=tahun_list, key="iph_ultra_final")
