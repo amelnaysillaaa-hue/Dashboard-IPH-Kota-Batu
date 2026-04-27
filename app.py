@@ -1002,7 +1002,7 @@ if st.session_state.user_role == "Publik_Shared":
                               textposition='outside', textfont_size=12, textfont_family="Lexend")
         fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
                               xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
-        st.plotly_chart(fig, use_container_width=True, theme=None)
+        st.plotly_chart(fig_bar, use_container_width=True, key="shared_bar")
     else:
         st.info("Belum ada data andil.")
     
