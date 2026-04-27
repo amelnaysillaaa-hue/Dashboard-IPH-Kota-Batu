@@ -969,7 +969,7 @@ if st.session_state.user_role == "Publik_Shared":
                      range=[min(tickvals)-0.5, max(tickvals)+0.5] if tickvals else [0,1],
                      showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
     fig.update_yaxes(showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
-    st.plotly_chart(fig, width='stretch', theme=None)
+    st.plotly_chart(fig, use_container_width=True, theme=None)
     
     # Tabel detail
     st.write("**Data Detail Mingguan:**")
@@ -1002,7 +1002,7 @@ if st.session_state.user_role == "Publik_Shared":
                               textposition='outside', textfont_size=12, textfont_family="Lexend")
         fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
                               xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
-        st.plotly_chart(fig_bar, width='stretch', theme=None)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
     else:
         st.info("Belum ada data andil.")
     
@@ -1789,7 +1789,7 @@ if menu == "Visualisasi IPH":
             df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
             if not df_th.empty:
                 x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
-                is_giant = df_th['indikator'].abs().max() > 100
+                is_giant = df_th['indikator'].abs().max() > 1000000
 
                 fig.add_trace(
                     go.Scatter(
@@ -1857,7 +1857,7 @@ if menu == "Visualisasi IPH":
         )
         fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
 
-        st.plotly_chart(fig, width='stretch', theme=None)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
 
         # Tabel Detail di Bawahnya
         st.write("**Data Detail Mingguan:**")
@@ -1932,7 +1932,7 @@ if menu == "Visualisasi IPH":
             xaxis=dict(showgrid=False),
             yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
         )
-        st.plotly_chart(fig_bar, width='stretch', theme=None)
+        st.plotly_chart(fig, use_container_width=True, theme=None)
     
     # ------------------------------------------------------------
     # LINK SHARE
