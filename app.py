@@ -998,7 +998,7 @@ if st.session_state.user_role == "Publik_Shared":
         fig_bar = px.bar(df_bar, x='Komoditas', y='Frekuensi',
                          title="5 Besar Komoditas Andil Perubahan Harga (Semua Tahun)",
                          color_discrete_sequence=['#FDCB6E'])
-        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white')), 
+        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white'), cornerradius=10),
                               textposition='outside', textfont_size=12, textfont_family="Lexend")
         fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
                               xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
