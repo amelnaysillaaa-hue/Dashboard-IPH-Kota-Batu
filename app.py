@@ -220,12 +220,12 @@ st.markdown("""
             padding: 1rem;
         }
         
-        /* === PLOTLY CHART === */
-        .js-plotly-plot .plotly .main-svg {
-            border-radius: 24px;
-            background: white;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.05);
+        /* === PERBAIKAN UNTUK PLOTLY (AGAR GRAFIK MUNCUL) === */
+        /* Hapus pengaturan background dan border-radius yang mengganggu */
+        .element-container .stPlotlyChart {
+            min-height: 450px; /* pastikan ada ruang untuk canvas */
         }
+        /* Jangan ubah properti internal Plotly */
         
         /* === TOMBOL HAPUS === */
         .stButton > button[kind="secondary"] {
@@ -1789,7 +1789,7 @@ if menu == "Visualisasi IPH":
             df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
             if not df_th.empty:
                 x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
-                is_giant = df_th['indikator'].abs().max() > 1000
+                is_giant = df_th['indikator'].abs().max() > 100
 
                 fig.add_trace(
                     go.Scatter(
@@ -1857,7 +1857,7 @@ if menu == "Visualisasi IPH":
         )
         fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
 
-        st.plotly_chart(fig, use_container_width=True, theme=None)
+        st.plotly_chart(fig, use_container_width=True)
 
         # Tabel Detail di Bawahnya
         st.write("**Data Detail Mingguan:**")
@@ -1888,7 +1888,7 @@ if menu == "Visualisasi IPH":
             for _, row in df_th.iterrows():
                 kom_list = row['komoditas_andil'].split("|")
                 for kom in kom_list:
-                    kom = kom.strip().upper()
+                    kom = kom.strip()
                     freq[kom] = freq.get(kom, 0) + 1
             freq_dict[th] = freq
         
@@ -1920,7 +1920,7 @@ if menu == "Visualisasi IPH":
                          color_discrete_sequence=pastel_colors)
         fig_bar.update_traces(
             textposition='outside',
-            marker=dict(line=dict(width=1, color='white')),
+            marker=dict(line=dict(width=1, color='white'), cornerradius=10),
             opacity=0.9,
             textfont_size=12,
             textfont_family="Lexend"
@@ -1932,7 +1932,8 @@ if menu == "Visualisasi IPH":
             xaxis=dict(showgrid=False),
             yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
         )
-        st.plotly_chart(fig, use_container_width=True, theme=None)
+        st.plotly_chart(fig_bar, use_container_width=True)
+
     
     # ------------------------------------------------------------
     # LINK SHARE
