@@ -23,6 +23,28 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# --- 1. TANGKAP DATA DARI URL (TARUH SETELAH IMPORT) ---
+query_params = st.query_params
+
+# Tangkap tahun_iph (formatnya string pisah pakai "|")
+url_tahun_iph = query_params.get("tahun_iph", "")
+if url_tahun_iph:
+    default_tahun_iph = [int(t) for t in url_tahun_iph.split("|")]
+else:
+    default_tahun_iph = None # Nanti bakal pake default dari list data
+
+# Tangkap tahun_andil
+url_tahun_andil = query_params.get("tahun_andil", "")
+if url_tahun_andil:
+    default_tahun_andil = [int(t) for t in url_tahun_andil.split("|")]
+else:
+    default_tahun_andil = None
+
+# Tangkap checkbox minggu terakhir
+url_last_week = query_params.get("last_week_only", "0")
+if "tampilkan_akhir" not in st.session_state:
+    st.session_state.tampilkan_akhir = True if url_last_week == "1" else False
+
 # --- CSS KUSTOM (tema BPS + font Lexend) ---
 st.markdown("""
     <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -894,10 +916,9 @@ if st.session_state.user_role == "Publik_Shared":
         </style>
     """, unsafe_allow_html=True)
     
-    st.markdown("<div class='main-header'><h1> Laporan IPH Kota Batu</h1></div>", unsafe_allow_html=True)
+    st.markdown("<div class='main-header'><h1>Laporan IPH Kota Batu</h1></div>", unsafe_allow_html=True)
     
     analisis_file = "iph_analisis.csv"
-    
     if not os.path.exists(analisis_file) or os.path.getsize(analisis_file) == 0:
         st.warning("Belum ada data IPH.")
         st.stop()
@@ -917,104 +938,168 @@ if st.session_state.user_role == "Publik_Shared":
             return s
         return value
     
-    # Ambil SEMUA tahun yang tersedia, urutkan
-    tahun_tersedia = sorted(df['tahun'].unique())
+    # --- Baca parameter dari URL ---
+    params = st.query_params
+    
+    # 1. Tangkap parameter tahun IPH
+    th_iph_str = params.get("tahun_iph", "")
+    if th_iph_str:
+        try:
+            tahun_iph_list = [int(x) for x in th_iph_str.split("|") if x]
+        except:
+            tahun_iph_list = [df['tahun'].max()]
+    else:
+        tahun_iph_list = [df['tahun'].max()]
+        
+    # 2. Tangkap parameter tahun Andil (SEBELUMNYA TERLEWAT DI SHARED VIEW)
+    th_andil_str = params.get("tahun_andil", "")
+    if th_andil_str:
+        try:
+            tahun_andil_list = [int(x) for x in th_andil_str.split("|") if x]
+        except:
+            tahun_andil_list = [df['tahun'].max()]
+    else:
+        tahun_andil_list = [df['tahun'].max()]
+    
+    # 3. Tangkap opsi minggu terakhir
+    last_week_only = params.get("last_week_only", "0")
+    tampilkan_akhir = True if last_week_only == "1" else False
+    
+    # Filter data berdasarkan tahun IPH
+    df_plot = df[df['tahun'].isin(tahun_iph_list)].copy()
+    if df_plot.empty:
+        st.warning(f"Tidak ada data untuk tahun yang dipilih: {tahun_iph_list}")
+        st.stop()
+    
+    if tampilkan_akhir:
+        last_weeks = df_plot.groupby(['tahun', 'bulan'])['minggu_ke'].max().reset_index()
+        df_plot = pd.merge(df_plot, last_weeks, on=['tahun', 'bulan', 'minggu_ke'], how='inner')
+        judul_tambahan = " (Minggu Terakhir)"
+    else:
+        judul_tambahan = ""
     
     # ------------------------------------------------------------
-    # GRAFIK IPH (semua tahun, overlay)
+    # GRAFIK IPH: ULTIMATE AESTHETIC (Disamakan persis dengan menu utama)
     # ------------------------------------------------------------
     st.subheader("Tren Indikator Perubahan Harga (%)")
+    from plotly.subplots import make_subplots
+    import plotly.graph_objects as go
     
-    # Buat mapping x untuk semua data
-    pair_list = df[['bulan', 'minggu_ke']].drop_duplicates().sort_values(['bulan','minggu_ke'])
-    x_mapping = {}
-    for idx, (b, m) in enumerate(zip(pair_list['bulan'], pair_list['minggu_ke'])):
-        x_mapping[(b, m)] = idx
-    df['x_pos'] = df.apply(lambda row: x_mapping[(row['bulan'], row['minggu_ke'])], axis=1)
-    df = df.sort_values(['tahun','x_pos'])
-    
-    tickvals, ticktext = [], []
-    bulan_sebelumnya = None
-    for (b,m), pos in x_mapping.items():
-        if b != bulan_sebelumnya:
-            tickvals.append(pos)
-            ticktext.append(bulan_map[b])
-            bulan_sebelumnya = b
-    
-    fig = go.Figure()
-    colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD', '#E67E22', '#9B59B6']
-    for i, th in enumerate(tahun_tersedia):
-        df_th = df[df['tahun'] == th].sort_values('x_pos')
-        if df_th.empty:
-            continue
-        x_vals = df_th['x_pos'].tolist()
-        y_vals = df_th['indikator'].tolist()
-        tooltips = df_th.apply(
-            lambda r: f"<b>Tahun {r['tahun']}</b><br>Minggu {r['minggu_ke']} {bulan_map[r['bulan']]}<br>IPH: {format_original(r['indikator'])}%",
-            axis=1
-        ).tolist()
-        fig.add_trace(go.Scatter(
-            x=x_vals, y=y_vals,
-            mode='lines+markers',
-            name=f"<b>{th}</b>",
-            line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
-            marker=dict(size=8, line=dict(width=1.5, color='white')),
-            hovertemplate='%{text}<extra></extra>',
-            text=tooltips,
-            hoverinfo='text'
-        ))
-    
+    judul_dalam = ""
+    if not df_plot.empty:
+        min_th, max_th = df_plot['tahun'].min(), df_plot['tahun'].max()
+        start_bln = bulan_map.get(df_plot[df_plot['tahun'] == min_th]['bulan'].min(), "")
+        end_bln = bulan_map.get(df_plot[df_plot['tahun'] == max_th]['bulan'].max(), "")
+        judul_dalam = f"<b>Indikator Perubahan Harga (%) per minggu, {start_bln} {min_th} - {end_bln} {max_th}{judul_tambahan}</b>"
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+    colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD']
+
+    for i, th in enumerate(tahun_iph_list):
+        df_th = df_plot[df_plot['tahun'] == th].sort_values(['bulan', 'minggu_ke'])
+        if not df_th.empty:
+            x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
+            is_giant = df_th['indikator'].abs().max() > 100
+            minggu_list = df_th['minggu_ke'].values
+            fig.add_trace(
+                go.Scatter(
+                    x=x_vals,
+                    y=df_th['indikator'],
+                    customdata=minggu_list,
+                    mode='lines+markers',
+                    name=f"<b>{th}</b>",
+                    line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
+                    marker=dict(size=8, line=dict(width=1.5, color='white')),
+                    connectgaps=True,
+                    hovertemplate=f"<b>Tahun {th}</b><br>Bulan %{{x:.0f}}<br>Minggu ke-%{{customdata}}<br>IPH: %{{y:.2f}}%<extra></extra>"
+                ),
+                secondary_y=is_giant
+            )
+
     fig.update_layout(
         height=500,
-        font=dict(family="Lexend, sans-serif"),
+        font=dict(family="Lexend, sans-serif"), 
+        margin=dict(t=100, b=50, l=60, r=60),
         plot_bgcolor='white',
         hovermode='x unified',
-        margin=dict(t=80, b=50),
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(family="Lexend")),
-        annotations=[dict(
-            text="<b>Indikator Perubahan Harga (%) per Minggu</b>",
-            xref="paper", yref="paper", x=0, y=1.12, showarrow=False,
-            font=dict(size=16, color="#333333", family="Lexend"), align="left"
-        )]
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1, font=dict(size=12, family="Lexend")),
+        annotations=[dict(text=judul_dalam, xref="paper", yref="paper", x=0, y=1.1, showarrow=False, font=dict(size=16, color="#333333", family="Lexend"), align="left")]
     )
-    fig.update_xaxes(tickmode='array', tickvals=tickvals, ticktext=ticktext, tickangle=0,
-                     range=[min(tickvals)-0.5, max(tickvals)+0.5] if tickvals else [0,1],
-                     showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
-    fig.update_yaxes(showgrid=True, gridcolor='#F0F0F0', tickfont=dict(family="Lexend"))
-    st.plotly_chart(fig, use_container_width=True, theme=None)
+    
+    fig.update_xaxes(tickfont=dict(family="Lexend"), range=[0.8, 12.8])
+    fig.update_yaxes(tickfont=dict(family="Lexend"), secondary_y=False)
+    fig.update_xaxes(
+        tickmode='array',
+        tickvals=list(range(1, 13)),
+        ticktext=['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'],
+        range=[0.8, 12.8],
+        showgrid=True, gridcolor='#F0F0F0', zeroline=False
+    )
+    fig.update_yaxes(title_text=None, secondary_y=False, showgrid=True, gridcolor='#F0F0F0', tickformat=',.2f')
+    fig.update_yaxes(title_text=None, secondary_y=True, showgrid=False)
+    st.plotly_chart(fig, use_container_width=True)
     
     # Tabel detail
     st.write("**Data Detail Mingguan:**")
     try:
-        tabel = df.pivot_table(index='tahun', columns=['bulan','minggu_ke'], values='indikator').round(2)
+        tabel = df_plot.pivot_table(index='tahun', columns=['bulan','minggu_ke'], values='indikator').round(2)
         tabel.columns = [f"{bulan_map.get(b,b)} M{int(m)}" for b,m in tabel.columns]
         st.dataframe(tabel, use_container_width=True)
-    except:
+    except Exception as e:
         pass
     
     # ------------------------------------------------------------
-    # ANDIL KOMODITAS (gabungan semua tahun)
+    # GRAFIK ANDIL KOMODITAS (Disamakan persis dengan menu utama)
     # ------------------------------------------------------------
     st.subheader("Komoditas Paling Sering Menjadi Andil Perubahan Harga")
-    # Frekuensi digabung untuk semua tahun
-    freq = {}
-    for _, row in df.iterrows():
-        for kom in row['komoditas_andil'].split("|"):
-            kom = kom.strip()
-            freq[kom] = freq.get(kom, 0) + 1
+    freq_dict = {}
+    for th in tahun_andil_list: # Menggunakan list andil dari URL, bukan semua data!
+        df_th = df[df['tahun'] == th]
+        freq = {}
+        for _, row in df_th.iterrows():
+            kom_list = row['komoditas_andil'].split("|")
+            for kom in kom_list:
+                kom = kom.strip()
+                freq[kom] = freq.get(kom, 0) + 1
+        freq_dict[th] = freq
     
-    # 5 teratas
-    top_kom = sorted(freq.items(), key=lambda x: x[1], reverse=True)[:5]
-    if top_kom:
-        df_bar = pd.DataFrame(top_kom, columns=['Komoditas', 'Frekuensi'])
-        fig_bar = px.bar(df_bar, x='Komoditas', y='Frekuensi',
-                         title="5 Besar Komoditas Andil Perubahan Harga (Semua Tahun)",
-                         color_discrete_sequence=['#FDCB6E'])
-        fig_bar.update_traces(marker=dict(line=dict(width=1, color='white'), cornerradius=10),
-                              textposition='outside', textfont_size=12, textfont_family="Lexend")
-        fig_bar.update_layout(font_family="Lexend", plot_bgcolor='rgba(0,0,0,0)',
-                              xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0'))
-        st.plotly_chart(fig_bar, use_container_width=True, key="shared_bar")
+    all_kom = set()
+    for f in freq_dict.values():
+        all_kom.update(f.keys())
+    data = []
+    for kom in all_kom:
+        row = {'Komoditas': kom}
+        for th in tahun_andil_list:
+            row[str(th)] = freq_dict[th].get(kom, 0)
+        data.append(row)
+    
+    if data:
+        df_bar = pd.DataFrame(data)
+        df_bar['Total'] = df_bar[[str(th) for th in tahun_andil_list]].sum(axis=1)
+        df_bar = df_bar.sort_values('Total', ascending=False)
+        top5 = df_bar.head(5)['Komoditas'].tolist()
+        df_top = df_bar[df_bar['Komoditas'].isin(top5)]
+        df_top = df_top.sort_values('Total', ascending=False)
+        
+        df_melt = df_top.melt(id_vars=['Komoditas'], value_vars=[str(th) for th in tahun_andil_list],
+                              var_name='Tahun', value_name='Frekuensi')
+        df_melt['Komoditas'] = pd.Categorical(df_melt['Komoditas'], categories=top5, ordered=True)
+        df_melt = df_melt.sort_values('Komoditas')
+        pastel_colors = ['#FDCB6E', '#6AB0DE', '#8CCB7E', '#F2A77C', '#C5A4D6', '#F4B8B8', '#B8D4E3']
+        fig_bar = px.bar(df_melt, x='Komoditas', y='Frekuensi', color='Tahun', barmode='group',
+                         title="5 Besar Komoditas Andil Perubahan Harga",
+                         labels={'Frekuensi':'Jumlah Kemunculan'},
+                         color_discrete_sequence=pastel_colors)
+        fig_bar.update_traces(
+            textposition='outside',
+            marker=dict(line=dict(width=1, color='white'), cornerradius=10),
+            opacity=0.9, textfont_size=12, textfont_family="Lexend"
+        )
+        fig_bar.update_layout(
+            font_family="Lexend", xaxis_tickangle=0, plot_bgcolor='rgba(0,0,0,0)',
+            xaxis=dict(showgrid=False), yaxis=dict(showgrid=True, gridcolor='#E2E8F0')
+        )
+        st.plotly_chart(fig_bar, use_container_width=True)
     else:
         st.info("Belum ada data andil.")
     
@@ -1768,7 +1853,8 @@ if menu == "Visualisasi IPH":
     st.subheader("Tren Indikator Perubahan Harga (%)")
     
     tahun_list = sorted(df['tahun'].unique())
-    tahun_iph = st.multiselect("Pilih Tahun Analisis", tahun_list, default=tahun_list, key="iph_ultra_final")
+    pilihan_iph = default_tahun_iph if default_tahun_iph else tahun_list
+    tahun_iph = st.multiselect("Pilih Tahun Analisis", tahun_list, default=pilihan_iph, key="iph_ultra_final")
 
     if tahun_iph:
         from plotly.subplots import make_subplots
@@ -1897,7 +1983,8 @@ if menu == "Visualisasi IPH":
     # GRAFIK ANDIL KOMODITAS
     # ------------------------------------------------------------
     st.subheader("Komoditas Paling Sering Menjadi Andil Perubahan Harga")
-    tahun_andil_multi = st.multiselect("Pilih Tahun untuk Andil Komoditas", tahun_list, default=[tahun_list[-1]], key="andil_year_multiselect")
+    pilihan_andil = default_tahun_andil if default_tahun_andil else [tahun_list[-1]]
+    tahun_andil_multi = st.multiselect("Pilih Tahun untuk Andil Komoditas", tahun_list, default=pilihan_andil, key="andil_year_multiselect")
     if not tahun_andil_multi:
         st.info("Pilih minimal satu tahun.")
     else:
@@ -1970,8 +2057,8 @@ if menu == "Visualisasi IPH":
         
         share_params = {
             "view": "shared",
-            "th_iph": th_iph_str,
-            "th_andil": th_andil_str,
+            "tahun_iph": th_iph_str,
+            "tahun_andil": th_andil_str,
             "last_week_only": "1" if st.session_state.get("tampilkan_akhir", False) else "0"
         }
 
