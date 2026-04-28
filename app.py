@@ -682,60 +682,60 @@ if not st.session_state.logged_in:
     # --- Custom CSS for Login Page (Dark & Orange Theme) ---
     st.markdown("""
         <style>
-            /* Latar belakang gelap + gradasi aksen oranye */
             .stApp {
                 background: linear-gradient(145deg, #1E1E1E 0%, #2D2D2D 50%, #3E3E3E 100%) !important;
             }
-            /* Sembunyikan sidebar */
-            [data-testid="stSidebar"] {
-                display: none;
+            [data-testid="stSidebar"] { display: none; }
+            h1, h2, h3 { color: #F97316 !important; }
+            p, .stCaption { color: #EEEEEE !important; }
+
+            /* ===== HAPUS SEMUA LATAR PUTIH DI AREA TAB ===== */
+            .stTabs [data-baseweb="tab-list"],
+            .stTabs [role="tablist"],
+            .stTabs div[role="tablist"] {
+                background: transparent !important;
+                background-color: transparent !important;
             }
-            /* Judul & teks */
-            h1, h2, h3 {
-                color: #F97316 !important;
-            }
-            p, .stCaption {
-                color: #EEEEEE !important;
-            }
-            /* Kontainer tab */
-            .stTabs [data-baseweb="tab-list"] {
-                background: transparent;
-                gap: 12px;
-                justify-content: center;
-            }
-            /* Tab (non-aktif) */
-            .stTabs button[data-baseweb="tab"] {
-                background: rgba(255, 255, 255, 0.1) !important;
-                color: #FFFFFF !important;
+            .stTabs button[data-baseweb="tab"],
+            .stTabs button[role="tab"] {
+                background: #2D2D2D !important;
+                color: #CCCCCC !important;
                 font-weight: 500;
                 padding: 0.5rem 2rem;
                 border-radius: 40px;
-                border: 1px solid rgba(249, 115, 22, 0.3) !important;
+                border: 1px solid rgba(249,115,22,0.3) !important;
                 box-shadow: none !important;
                 transition: all 0.3s ease;
             }
-            /* Hover tab non-aktif */
-            .stTabs button[data-baseweb="tab"]:hover {
-                background: rgba(249, 115, 22, 0.25) !important;
+            .stTabs button[data-baseweb="tab"]:hover,
+            .stTabs button[role="tab"]:hover {
+                background: #3E3E3E !important;
+                color: #FFFFFF !important;
                 border-color: #F97316 !important;
             }
-            /* Tab aktif */
-            .stTabs button[data-baseweb="tab"][aria-selected="true"] {
+            .stTabs button[data-baseweb="tab"][aria-selected="true"],
+            .stTabs button[role="tab"][aria-selected="true"] {
                 background: #F97316 !important;
                 color: #FFFFFF !important;
                 font-weight: 700;
                 border: 1px solid #F97316 !important;
-                box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);
+                box-shadow: 0 0 15px rgba(249,115,22,0.4);
             }
+            /* Paksa seluruh tab panel tidak punya background putih */
+            .stTabs [data-baseweb="tab-panel"],
+            .stTabs [role="tabpanel"] {
+                background: transparent !important;
+            }
+
             /* Label form */
             .stTextInput label, .stSelectbox label {
-                color: #EEEEEE !important;
-                font-weight: 500;
+                color: #FF9800 !important;
+                font-weight: 600 !important;
             }
+
             /* Input field */
-            .stTextInput > div > div > input,
-            .stSelectbox > div > div {
-                background: rgba(30, 30, 30, 0.8) !important;
+            .stTextInput > div > div > input {
+                background: rgba(30,30,30,0.8) !important;
                 border: 1px solid #F97316 !important;
                 color: #FFFFFF !important;
                 border-radius: 14px !important;
@@ -745,53 +745,65 @@ if not st.session_state.logged_in:
                 color: #FF9800 !important;
                 opacity: 0.7;
             }
-            /* >>> TAMBAHKAN DI SINI <<< */
-            .stSelectbox [data-baseweb="select"] [aria-selected="true"] {
+
+            /* Dropdown */
+            div[data-baseweb="select"] {
+                background-color: #2D2D2D !important;
+                border-radius: 14px !important;
+                border: 1px solid #F97316 !important;
+            }
+            div[data-baseweb="select"] div[class*="singleValue"],
+            div[data-baseweb="select"] div[class*="placeholder"] {
                 color: #FFFFFF !important;
             }
-            .stSelectbox [data-baseweb="select"] span {
+            div[data-baseweb="select"] svg { fill: #F97316 !important; }
+            div[data-baseweb="select"] span { color: #FFFFFF !important; }
+            div[data-baseweb="popover"] {
+                background-color: #2D2D2D !important;
+                border: 1px solid #F97316 !important;
+            }
+            div[data-baseweb="popover"] li {
+                background-color: #2D2D2D !important;
                 color: #FFFFFF !important;
             }
-            /* Tombol utama (oranye gradasi) */
+            div[data-baseweb="popover"] li:hover {
+                background-color: #F97316 !important;
+                color: #FFFFFF !important;
+            }
+
+            /* Semua tombol */
+            /* Tombol utama TETAP GELAP */
             div.stButton > button:first-child {
-                background: linear-gradient(90deg, #F97316 0%, #EA580C 100%) !important;
-                color: white !important;
-                border: none !important;
+                background: #2D2D2D !important;          /* abu‑abu gelap */
+                color: #FFFFFF !important;              /* teks putih */
+                border: 1px solid #F97316 !important;   /* border oranye */
                 border-radius: 30px !important;
                 font-weight: 600 !important;
                 padding: 0.6rem 1.5rem;
                 transition: all 0.3s ease;
-                box-shadow: 0 4px 12px rgba(249, 115, 22, 0.4);
+                box-shadow: none !important;            /* hilangkan shadow oranye bawaan */
             }
             div.stButton > button:first-child:hover {
-                background: linear-gradient(90deg, #EA580C 0%, #C2410C 100%) !important;
-                box-shadow: 0 6px 18px rgba(249, 115, 22, 0.6);
-                transform: translateY(-2px);
+                background: #3E3E3E !important;        /* sedikit lebih terang saat di‑hover */
+                border-color: #F97316 !important;
+                color: #FFFFFF !important;
+                box-shadow: 0 0 10px rgba(249, 115, 22, 0.4);
             }
-            /* Notifikasi / Alert */
+            button[kind="secondary"] {
+                background: transparent !important;
+                border: 1.5px solid #F97316 !important;
+                color: #F97316 !important;
+                box-shadow: none !important;
+            }
+            button[kind="secondary"]:hover {
+                background: #F97316 !important;
+                color: white !important;
+            }
+
             .stAlert {
-                background: rgba(249, 115, 22, 0.15) !important;
+                background: rgba(249,115,22,0.15) !important;
                 color: #FFFFFF !important;
                 border-left: 4px solid #F97316 !important;
-                border-radius: 12px;
-            }
-            /* Label form berwarna oranye terang */
-            .stTextInput label, .stSelectbox label {
-                color: #FF9800 !important;
-                font-weight: 600 !important;
-            }
-            /* Pastikan teks yang dipilih di dropdown berwarna putih */
-            .stSelectbox div[data-baseweb="select"] div {
-                color: #FFFFFF !important;
-            }
-            .stSelectbox [data-baseweb="select"] span {
-                color: #FFFFFF !important;
-            }
-            /* Paksa teks pilihan di dropdown menjadi putih */
-            div[data-baseweb="select"] span[class*="singleValue"],
-            div[data-baseweb="select"] div[class*="singleValue"],
-            div[data-baseweb="select"] div[data-value] {
-                color: #FFFFFF !important;
             }
         </style>
     """, unsafe_allow_html=True)
@@ -1750,16 +1762,7 @@ if menu == "Visualisasi IPH":
     bulan_map = {1:"Jan",2:"Feb",3:"Mar",4:"Apr",5:"Mei",6:"Jun",7:"Jul",8:"Agu",9:"Sep",10:"Okt",11:"Nov",12:"Des"}
     df['bulan_nama'] = df['bulan'].apply(lambda x: bulan_map[x])
     
-    # Fungsi format angka tanpa batasan desimal
-    def format_angka(val):
-        if pd.isna(val):
-            return "NaN"
-        if val == int(val):
-            return str(int(val))
-        s = f"{val:.10f}".rstrip('0').rstrip('.')
-        return s
-    
-# ------------------------------------------------------------
+    # ------------------------------------------------------------
     # GRAFIK IPH: ULTIMATE AESTHETIC (VERSI BERKELAS)
     # ------------------------------------------------------------
     st.subheader("Tren Indikator Perubahan Harga (%)")
@@ -1773,14 +1776,30 @@ if menu == "Visualisasi IPH":
 
         df_plot = df[df['tahun'].isin(tahun_iph)].copy()
         
-# 1. SETUP JUDUL (GANTI: Tambah tag <b> agar Bold)
+        # --- OPSI TAMPILKAN HANYA MINGGU TERAKHIR PER BULAN ---
+        tampilkan_akhir = st.checkbox(
+            "Tampilkan hanya minggu terakhir setiap bulan",
+            value=st.session_state.get("tampilkan_akhir", False),
+            key="checkbox_minggu_terakhir"
+        )
+        st.session_state.tampilkan_akhir = tampilkan_akhir
+        
+        if tampilkan_akhir:
+            # Cari minggu terakhir untuk setiap tahun & bulan
+            last_weeks = df_plot.groupby(['tahun', 'bulan'])['minggu_ke'].max().reset_index()
+            df_plot = pd.merge(df_plot, last_weeks, on=['tahun', 'bulan', 'minggu_ke'], how='inner')
+            judul_tambahan = " (Minggu Terakhir)"
+        else:
+            judul_tambahan = ""
+        
+        # 1. SETUP JUDUL (GANTI: Tambah tag <b> agar Bold)
         judul_dalam = ""
         if not df_plot.empty:
             min_th, max_th = df_plot['tahun'].min(), df_plot['tahun'].max()
             start_bln = bulan_map.get(df_plot[df_plot['tahun'] == min_th]['bulan'].min(), "")
             end_bln = bulan_map.get(df_plot[df_plot['tahun'] == max_th]['bulan'].max(), "")
             # Teks dibungkus <b> agar Bold
-            judul_dalam = f"<b>Indikator Perubahan Harga (%) per minggu, {start_bln} {min_th} - {end_bln} {max_th}</b>"
+            judul_dalam = f"<b>Indikator Perubahan Harga (%) per minggu, {start_bln} {min_th} - {end_bln} {max_th}{judul_tambahan}</b>"
 
         fig = make_subplots(specs=[[{"secondary_y": True}]])
         colors = ['#54A24B', '#D35400', '#F1C40F', '#2980B9', '#8E44AD']
@@ -1791,16 +1810,18 @@ if menu == "Visualisasi IPH":
                 x_vals = df_th['bulan'] + (df_th['minggu_ke'] - 1) / 4
                 is_giant = df_th['indikator'].abs().max() > 100
 
+                minggu_list = df_th['minggu_ke'].values
                 fig.add_trace(
                     go.Scatter(
                         x=x_vals,
                         y=df_th['indikator'],
+                        customdata=minggu_list,
                         mode='lines+markers',
-                        name=f"<b>{th}</b>", # GANTI: Nama tahun di legenda jadi Bold
+                        name=f"<b>{th}</b>",
                         line=dict(width=4, color=colors[i % len(colors)], shape='spline', smoothing=1.3),
                         marker=dict(size=8, line=dict(width=1.5, color='white')),
                         connectgaps=True,
-                        hovertemplate=f"<b>Tahun {th}</b><br>Minggu %{{x}}<br>IPH: %{{y}}%<extra></extra>"
+                        hovertemplate=f"<b>Tahun {th}</b><br>Bulan %{{x:.0f}}<br>Minggu ke-%{{customdata}}<br>IPH: %{{y:.2f}}%<extra></extra>"
                     ),
                     secondary_y=is_giant
                 )
@@ -1936,19 +1957,22 @@ if menu == "Visualisasi IPH":
 
     
     # ------------------------------------------------------------
-    # LINK SHARE
+    # LINK SHARE (SUDAH SINKRON DENGAN CHECKBOX)
     # ------------------------------------------------------------
     st.markdown("---")
     with st.expander("🔗 Bagikan Tampilan Ini"):
         base_url = "https://dashboard-iph-kota-batu-cwg5au63betgavnrt2lmpk.streamlit.app"
         import urllib.parse
         
-        # Mengubah list tahun [2023, 2024] jadi string "2023|2024"
+        # Ubah list tahun ke string terpisah "|"
         th_iph_str = "|".join(map(str, tahun_iph)) if tahun_iph else ""
         th_andil_str = "|".join(map(str, tahun_andil_multi)) if tahun_andil_multi else ""
         
         share_params = {
-            "view": "shared"
+            "view": "shared",
+            "th_iph": th_iph_str,
+            "th_andil": th_andil_str,
+            "last_week_only": "1" if st.session_state.get("tampilkan_akhir", False) else "0"
         }
 
         query_string = urllib.parse.urlencode(share_params)
