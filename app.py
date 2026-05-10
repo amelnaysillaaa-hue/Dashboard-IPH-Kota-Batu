@@ -339,7 +339,7 @@ if not os.path.exists(NOTIF_DB):
 # --- INISIALISASI DAFTAR PEGAWAI (DINAMIS) ---
 PEGAWAI_DB = "daftar_pegawai.csv"
 DEFAULT_PEGAWAI_LIST = [
-    "Ir. Yuniarni Erry Wahyuti",
+    "Yuniarni Erry Wahyuti",
     "Adam Mahmud",
     "Gatot Suharmoko",
     "Muhammad Arief Nurohman",
