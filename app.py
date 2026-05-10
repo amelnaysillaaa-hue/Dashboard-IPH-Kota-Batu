@@ -397,12 +397,11 @@ def generate_ringkasan_indikator(tahun, bulan, minggu_ke):
     
     row = data_periode.iloc[0]
     
-    # Format angka sesuai input asli (tidak dibatasi 2 desimal)
+    # Format angka: ganti titik jadi koma, tanpa tanda %
     def format_original(value):
         if isinstance(value, (int, float)):
-            s = f"{value:.10f}"
-            s = s.rstrip('0').rstrip('.')
-            return s
+            s = f"{value:.10f}".rstrip('0').rstrip('.')
+            return s.replace('.', ',')
         return value
     
     indikator = row['indikator']
@@ -416,21 +415,24 @@ def generate_ringkasan_indikator(tahun, bulan, minggu_ke):
     kom_list = row['komoditas_andil'].split("|")
     nilai_list = [float(x) if x.strip() else 0.0 for x in row['nilai_andil'].split("|")]
     
+    # Komoditas andil (tanpa %)
     andil_lines = []
-    for i, (kom, nil) in enumerate(zip(kom_list, nilai_list), start=1):
-        andil_lines.append(f"{i}. {kom.title()} ({format_original(nil)}%)")
+    for kom, nil in zip(kom_list, nilai_list):
+        if nil != 0.0:
+            andil_lines.append(f"{kom.title()} ({format_original(nil)})")
     andil_str = "\n".join(andil_lines)
-    
-    fluk_kom = row['fluktuasi_komoditas']
-    fluk_nilai = row['fluktuasi_nilai']
     
     bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][bulan-1]
     
     ringkasan = (
-        f"Berikut kami sampaikan IPH Kota Batu minggu ke-{minggu_ke} {bulan_nama} {tahun}.\n"
-        f"Kota Batu mengalami {jenis} sebesar {format_original(indikator)}%\n\n"
-        f"Komoditas penyumbang andil terbesar:\n{andil_str}\n"
-        f"Fluktuasi harga tertinggi terjadi pada {fluk_kom.title()} dengan perubahan {format_original(fluk_nilai)}%."
+        f"Yth. Bapak/Ibu,\n"
+        f"Berikut kami sampaikan informasi Indeks Perkembangan Harga (IPH) Kota Batu pada minggu ke-{minggu_ke} {bulan_nama} {tahun}.\n"
+        f"Pada periode tersebut, Kota Batu mengalami {jenis} sebesar {format_original(indikator)}.\n\n"
+        f"Adapun komoditas yang memberikan andil terbesar terhadap {jenis} adalah sebagai berikut:\n"
+        f"{andil_str}\n\n"
+        f"Demikian kami sampaikan. Atas perhatian dan kerja samanya, kami ucapkan terima kasih.\n\n"
+        f"Hormat kami,\n"
+        f"BPS Kota Batu"
     )
     return ringkasan
 
