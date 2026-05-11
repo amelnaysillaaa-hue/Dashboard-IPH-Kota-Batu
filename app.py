@@ -1443,6 +1443,19 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Pegawai":
     
     st.subheader("Daftar Pegawai Saat Ini")
     st.write(load_pegawai())
+    st.markdown("---")
+    st.subheader("Database Pengguna")
+    if os.path.exists(USER_DB):
+        with open(USER_DB, "rb") as f:
+            st.download_button(
+                label="📥 Unduh users_list.csv",
+                data=f,
+                file_name="users_list.csv",
+                mime="text/csv",
+                key="download_users_db"
+            )
+    else:
+        st.warning("File users_list.csv tidak ditemukan.")    
 
 # ======================= PEGAWAI: ISI RESUME RAPAT =======================
 def form_isi_resume_pegawai(row):
