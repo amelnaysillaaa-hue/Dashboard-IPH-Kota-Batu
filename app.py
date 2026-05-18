@@ -1393,7 +1393,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                     buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
                     st.success("Rapat diupdate! Ringkasan indikator tidak berubah (manual).")
                     st.rerun()
-                    
+
                 if st.button(f"🗑️ Hapus Rapat", key=f"hapus_{row['id']}_{idx}"):
                     df_temp = pd.read_csv(RAPAT_DB)
                     df_temp = df_temp[df_temp['id'] != row['id']]
@@ -1476,7 +1476,6 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Pegawai":
 # ======================= PEGAWAI: ISI RESUME RAPAT =======================
 def form_isi_resume_pegawai(row):
     with st.form(f"form_resume_pegawai_{row['id']}"):
-        # Ringkasan indikator diambil dari database (tidak otomatis)
         ringkasan = st.text_area(
             "Ringkasan Indikator (copy dari menu Analisis IPH)", 
             value=row['ringkasan_indikator'] if pd.notna(row['ringkasan_indikator']) else "", 
@@ -1516,11 +1515,17 @@ def form_isi_resume_pegawai(row):
         
         if submitted:
             df = pd.read_csv(RAPAT_DB)
+            # Pastikan semua kolom teks bertipe string
+            for col in ['ringkasan_indikator', 'resume', 'action_items', 'gambar_dokumentasi']:
+                if col in df.columns:
+                    df[col] = df[col].astype(str)
+            
             idx = df[df['id'] == row['id']].index[0]
             df.at[idx, 'ringkasan_indikator'] = ringkasan
             df.at[idx, 'resume'] = resume
             df.at[idx, 'action_items'] = action
             
+            # Konversi link gambar
             import re
             links = gambar_dok.strip().split('\n')
             direct_links = []
