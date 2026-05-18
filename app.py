@@ -531,115 +531,130 @@ def tandai_baca(id_rapat, pegawai):
 
 def generate_pdf_resume(row):
     try:
+        # Gunakan font Helvetica (lebih modern, standar)
         pdf = FPDF()
         pdf.set_auto_page_break(auto=True, margin=15)
         pdf.add_page()
         
-        # ========== HEADER SATU BLOK BIRU ==========
+        # ========== HEADER ==========
         pdf.set_fill_color(30, 60, 120)
         pdf.set_text_color(255, 255, 255)
-        pdf.set_font("Times", 'B', 16)
+        pdf.set_font("Helvetica", 'B', 16)
         pdf.cell(0, 10, "LAPORAN HASIL RAPAT TPID", ln=True, align='C', fill=True)
-        pdf.set_font("Times", 'B', 11)
+        pdf.set_font("Helvetica", 'B', 11)
         pdf.cell(0, 8, "Tim Pengendalian Inflasi Daerah Kota Batu", ln=True, align='C', fill=True)
         pdf.set_text_color(0, 0, 0)
-        pdf.ln(6)
+        pdf.ln(3)  # jarak kecil
         
+        # ========== FUNGSI BANTU ==========
         def safe_str(val, default="-"):
-            s = str(val) if pd.notna(val) and str(val).strip() != '' else default
-            return s
-        
-        # ========== TABEL INFORMASI (RAPI) ==========
+            return str(val) if pd.notna(val) and str(val).strip() != '' else default
+
+        # Fungsi untuk menangani teks dengan newline (\n) secara manual
+        def multi_cell_with_newline(pdf, text, width, height, border=0):
+            # Pecah berdasarkan newline
+            lines = text.split('\n')
+            for i, line in enumerate(lines):
+                # Potong manual jika terlalu panjang? biarkan multi_cell menangani wrapping
+                pdf.multi_cell(width, height, line, border=border)
+                if i < len(lines) - 1:
+                    # setelah baris yang bukan baris terakhir, reset x dan lanjut
+                    pdf.set_x(pdf.l_margin)
+
+        # ========== TABEL INFORMASI ==========
         col_w_label = 45
         col_w_value = pdf.w - pdf.l_margin - col_w_label - pdf.r_margin
-        line_h = 8
-        
+        line_h = 7  # lebih kecil dari 8
+
         def draw_table_row(label, value):
-            pdf.set_font("Times", 'B', 12)
-            pdf.cell(col_w_label, line_h, " " + label + " ", border=1, ln=0)
-            pdf.set_font("Times", '', 12)
+            pdf.set_font("Helvetica", 'B', 10)
+            pdf.set_fill_color(240, 240, 240)  # abu terang
+            pdf.cell(col_w_label, line_h, " " + label + " ", border=1, ln=0, fill=True)
+            pdf.set_font("Helvetica", '', 10)
             pdf.multi_cell(col_w_value, line_h, " " + safe_str(value) + " ", border=1, ln=1)
             pdf.set_x(pdf.l_margin)
-        
-        draw_table_row("Tanggal Rapat", safe_str(row.get('tanggal')))
-        draw_table_row("Petugas", safe_str(row.get('pegawai')))
-        draw_table_row("Link Undangan", safe_str(row.get('link_undangan')))
-        draw_table_row("Link Bahan", safe_str(row.get('link_bahan_materi')))
-        draw_table_row("Link Dokumentasi", safe_str(row.get('link_dokumentasi')))
-        pdf.ln(5)
-        
+
+        draw_table_row("Tanggal Rapat", row.get('tanggal'))
+        draw_table_row("Petugas", row.get('pegawai'))
+        draw_table_row("Link Undangan", row.get('link_undangan'))
+        draw_table_row("Link Bahan", row.get('link_bahan_materi'))
+        draw_table_row("Link Dokumentasi", row.get('link_dokumentasi'))
+        pdf.ln(2)
+
         # ========== RINGKASAN INDIKATOR ==========
-        pdf.set_font("Times", 'B', 13)
+        pdf.set_font("Helvetica", 'B', 12)
         pdf.set_text_color(30, 60, 120)
-        pdf.cell(0, 8, "RINGKASAN INDIKATOR PERUBAHAN HARGA", ln=True)
+        pdf.cell(0, 7, "RINGKASAN INDIKATOR PERUBAHAN HARGA", ln=True)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Times", '', 11)
-        pdf.multi_cell(0, 6, safe_str(row.get('ringkasan_indikator'), "Data tidak tersedia."))
-        pdf.ln(4)
-        
+        pdf.set_font("Helvetica", '', 10)
+        ringkasan = safe_str(row.get('ringkasan_indikator'), "Data tidak tersedia.")
+        multi_cell_with_newline(pdf, ringkasan, 0, 5)
+        pdf.ln(1)
+
         # ========== RESUME ==========
-        pdf.set_font("Times", 'B', 13)
+        pdf.set_font("Helvetica", 'B', 12)
         pdf.set_text_color(30, 60, 120)
-        pdf.cell(0, 8, "RESUME HASIL RAPAT", ln=True)
+        pdf.cell(0, 7, "RESUME HASIL RAPAT", ln=True)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Times", '', 11)
-        pdf.multi_cell(0, 6, safe_str(row.get('resume'), "Belum diisi"))
-        pdf.ln(4)
-        
+        pdf.set_font("Helvetica", '', 10)
+        resume_text = safe_str(row.get('resume'), "Belum diisi")
+        multi_cell_with_newline(pdf, resume_text, 0, 5)
+        pdf.ln(1)
+
         # ========== TINDAK LANJUT ==========
-        pdf.set_font("Times", 'B', 13)
+        pdf.set_font("Helvetica", 'B', 12)
         pdf.set_text_color(30, 60, 120)
-        pdf.cell(0, 8, "TINDAK LANJUT / ACTION ITEMS", ln=True)
+        pdf.cell(0, 7, "TINDAK LANJUT / ACTION ITEMS", ln=True)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Times", '', 11)
-        pdf.multi_cell(0, 6, safe_str(row.get('action_items'), "Belum diisi"))
-        pdf.ln(4)
-        
+        pdf.set_font("Helvetica", '', 10)
+        action_text = safe_str(row.get('action_items'), "Belum diisi")
+        multi_cell_with_newline(pdf, action_text, 0, 5)
+        pdf.ln(1)
+
         # ========== STATUS ==========
-        pdf.set_font("Times", 'B', 13)
+        pdf.set_font("Helvetica", 'B', 12)
         pdf.set_text_color(30, 60, 120)
-        pdf.cell(0, 8, "STATUS PENYELESAIAN", ln=True)
+        pdf.cell(0, 7, "STATUS PENYELESAIAN", ln=True)
         pdf.set_text_color(0, 0, 0)
-        pdf.set_font("Times", '', 12)
+        pdf.set_font("Helvetica", '', 10)
         pdf.cell(0, 6, safe_str(row.get('status'), 'Belum ditentukan'), ln=True)
-        pdf.ln(6)
-        
-        # ========== DOKUMENTASI GAMBAR (GRID 2 KOLOM, KECIL) ==========
+        pdf.ln(2)
+
+        # ========== DOKUMENTASI GAMBAR ==========
         gambar_links = []
         if 'gambar_dokumentasi' in row and pd.notna(row['gambar_dokumentasi']) and str(row['gambar_dokumentasi']).strip():
             gambar_links = [link.strip() for link in str(row['gambar_dokumentasi']).split('\n') if link.strip()]
-        
+
         if gambar_links:
-            pdf.set_font("Times", 'B', 13)
+            pdf.set_font("Helvetica", 'B', 12)
             pdf.set_text_color(30, 60, 120)
-            pdf.cell(0, 8, "DOKUMENTASI KEGIATAN", ln=True)
+            pdf.cell(0, 7, "DOKUMENTASI KEGIATAN", ln=True)
             pdf.set_text_color(0, 0, 0)
-            pdf.ln(3)
-            
+            pdf.ln(2)
+
             # Pengaturan grid
-            img_w = 80          # lebar gambar kecil
-            img_h = 60          # perkiraan tinggi (akan disesuaikan proporsional)
-            margin_x = 10       # jarak antar gambar
-            margin_y = 5        # jarak vertikal antar baris
-            start_x = pdf.l_margin + 5
+            img_w = 70          # lebih proporsional
+            img_h = 70
+            margin_x = 8
+            margin_y = 5
+            start_x = pdf.l_margin
             start_y = pdf.get_y()
             current_x = start_x
             current_y = start_y
             count_in_row = 0
-            
+
             session = requests.Session()
             session.headers.update({'User-Agent': 'Mozilla/5.0'})
-            
+
             for idx, link in enumerate(gambar_links, start=1):
-                # CEK APAKAH MASIH ADA RUANG VERTIKAL YANG CUKUP
                 if current_y + img_h > pdf.h - pdf.b_margin:
-                    pdf.add_page()                # tambah halaman baru
-                    current_y = pdf.t_margin      # reset Y ke margin atas
-                    current_x = start_x           # reset X ke margin kiri
-                    count_in_row = 0              # reset jumlah gambar dalam baris
-                
+                    pdf.add_page()
+                    current_y = pdf.t_margin
+                    current_x = start_x
+                    count_in_row = 0
+
                 try:
-                    resp = session.get(link, timeout=15)
+                    resp = session.get(link, timeout=10)
                     if resp.status_code == 200 and 'image' in resp.headers.get('Content-Type', ''):
                         img_data = BytesIO(resp.content)
                         pdf.image(img_data, x=current_x, y=current_y, w=img_w)
@@ -650,32 +665,29 @@ def generate_pdf_resume(row):
                             current_y += img_h + margin_y
                             count_in_row = 0
                     else:
-                        raise Exception(f"HTTP {resp.status_code} atau bukan gambar")
-                except Exception as e:
-                    pdf.set_font("Times", 'I', 9)
+                        raise Exception()
+                except:
+                    pdf.set_font("Helvetica", 'I', 8)
                     pdf.set_xy(current_x, current_y)
-                    pdf.cell(img_w, 6, f"(Gambar {idx} gagal)", ln=True)
+                    pdf.cell(img_w, 6, f"(Gambar {idx} gagal)", ln=False)
                     current_x += img_w + margin_x
                     if count_in_row == 2:
                         current_x = start_x
                         current_y += 10
                         count_in_row = 0
-            
-            # Pindahkan kursor ke bawah grid terakhir
-            if count_in_row != 0:
-                current_y += img_h + margin_y
-            pdf.set_y(current_y + 5)
+
+            pdf.ln(3)
         else:
-            pdf.set_font("Times", 'I', 11)
-            pdf.cell(0, 8, "Tidak ada gambar dokumentasi.", ln=True)
-        
+            pdf.set_font("Helvetica", 'I', 10)
+            pdf.cell(0, 6, "Tidak ada gambar dokumentasi.", ln=True)
+
         return bytes(pdf.output())
-    
+
     except Exception as e:
         pdf = FPDF()
         pdf.add_page()
-        pdf.set_font("Times", '', 12)
-        pdf.multi_cell(0, 10, f"Gagal membuat PDF: {e}")
+        pdf.set_font("Helvetica", '', 10)
+        pdf.multi_cell(0, 6, f"Gagal membuat PDF: {e}")
         return bytes(pdf.output())
 
 # --- SESSION STATE LOGIN (VERSI TERBARU UNTUK MULTISELECT) ---
