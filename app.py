@@ -1332,7 +1332,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                 tahun_rapat = tanggal.year
                 bulan_rapat = tanggal.month
                 minggu_rapat = get_minggu_dari_tanggal(tanggal)
-                ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat)
+                ringkasan_awal = ""   
                 df = pd.read_csv(RAPAT_DB)
                 teks_cols = ['ringkasan_indikator', 'resume', 'action_items', 'gambar_dokumentasi', 'status', 'last_editor', 'created_by', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi', 'pegawai']
                 for col in teks_cols:
@@ -1385,13 +1385,15 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                     ringkasan_baru = generate_ringkasan_indikator(tahun_baru, bulan_baru, minggu_baru)
 
                     df = pd.read_csv(RAPAT_DB)
-                    df.loc[df['id'] == row['id'], ['tanggal', 'pegawai', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi', 'ringkasan_indikator']] = [
-                        tgl, " || ".join(pegawai_edit), link_und, link_bahan, link_dok, ringkasan_baru
+                    df.loc[df['id'] == row['id'], ['tanggal', 'pegawai', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi']] = [
+                        tgl, " || ".join(pegawai_edit), link_und, link_bahan, link_dok
                     ]
+                    # Jangan update ringkasan_indikator
                     df.to_csv(RAPAT_DB, index=False)
                     buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
-                    st.success("Rapat diupdate! Ringkasan indikator diperbarui sesuai tanggal baru.")
+                    st.success("Rapat diupdate! Ringkasan indikator tidak berubah (manual).")
                     st.rerun()
+                    
                 if st.button(f"🗑️ Hapus Rapat", key=f"hapus_{row['id']}_{idx}"):
                     df_temp = pd.read_csv(RAPAT_DB)
                     df_temp = df_temp[df_temp['id'] != row['id']]
@@ -1473,22 +1475,12 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Pegawai":
 
 # ======================= PEGAWAI: ISI RESUME RAPAT =======================
 def form_isi_resume_pegawai(row):
-    tgl_rapat = pd.to_datetime(row['tanggal'])
-    ringkasan_fresh = generate_ringkasan_indikator(
-        tgl_rapat.year, 
-        tgl_rapat.month, 
-        get_minggu_dari_tanggal(tgl_rapat)
-    )
-    
-    # Tampilkan pratinjau agar user bisa melihat format yang benar (dengan enter)
-    st.markdown("**Ringkasan Indikator (pratinjau):**")
-    st.code(ringkasan_fresh, language='text')
-    
     with st.form(f"form_resume_pegawai_{row['id']}"):
+        # Ringkasan indikator diambil dari database (tidak otomatis)
         ringkasan = st.text_area(
-            "Edit Ringkasan (jika perlu)", 
-            value=ringkasan_fresh, 
-            height=200,
+            "Ringkasan Indikator (copy dari menu Analisis IPH)", 
+            value=row['ringkasan_indikator'] if pd.notna(row['ringkasan_indikator']) else "", 
+            height=150,
             key=f"ringkasan_{row['id']}"
         )
         resume = st.text_area(
@@ -1508,6 +1500,8 @@ def form_isi_resume_pegawai(row):
             "Link Gambar Dokumentasi (satu link per baris)",
             value=old_val,
             height=100,
+            help="Tempel link Google Drive (biasa atau direct).",
+            placeholder="https://drive.google.com/file/d/...",
             key=f"gambar_{row['id']}"
         )
         status = st.selectbox(
@@ -1523,11 +1517,10 @@ def form_isi_resume_pegawai(row):
         if submitted:
             df = pd.read_csv(RAPAT_DB)
             idx = df[df['id'] == row['id']].index[0]
-            df.at[idx, 'ringkasan_indikator'] = ringkasan  # ringkasan sudah mengandung \n
+            df.at[idx, 'ringkasan_indikator'] = ringkasan
             df.at[idx, 'resume'] = resume
             df.at[idx, 'action_items'] = action
             
-            # Konversi link gambar (sama seperti kode asli Anda)
             import re
             links = gambar_dok.strip().split('\n')
             direct_links = []
@@ -1572,72 +1565,9 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
                 st.markdown(f"**Link Bahan:** {row['link_bahan_materi']}")
                 st.markdown(f"**Upload Dokumentasi di Tautan Berikut:** {row['link_dokumentasi']}")
                 st.markdown("---")
-                
-                # ========== AMBIL RINGKASAN INDIKATOR TERBARU ==========
-                tgl_rapat = pd.to_datetime(row['tanggal'])
-                tahun_rapat = tgl_rapat.year
-                bulan_rapat = tgl_rapat.month
-                minggu_rapat = get_minggu_dari_tanggal(tgl_rapat)
-                ringkasan_fresh = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat)
-                # ===================================================
-                
-                with st.form(f"form_resume_pegawai_{row['id']}"):
-                    # Gunakan ringkasan_fresh sebagai nilai default, bukan row['ringkasan_indikator']
-                    ringkasan = st.text_area("Ringkasan Indikator (berdasarkan data IPH terbaru)", 
-                                             value=ringkasan_fresh, height=100, key=f"ringkasan_{row['id']}")
-                    resume = st.text_area("Resume Hasil Rapat", 
-                                          value=row['resume'] if pd.notna(row['resume']) else "", 
-                                          height=150, key=f"resume_{row['id']}")
-                    action = st.text_area("Action Items", 
-                                          value=row['action_items'] if pd.notna(row['action_items']) else "", 
-                                          height=100, key=f"action_{row['id']}")
-                    old_val = row['gambar_dokumentasi'] if pd.notna(row.get('gambar_dokumentasi')) else ""
-                    gambar_dok = st.text_area(
-                        "Link Gambar Dokumentasi (satu link per baris)",
-                        value=old_val,
-                        height=100,
-                        help="Tempel link Google Drive apa adanya (biasa atau direct). Sistem akan otomatis mengubahnya.",
-                        placeholder="https://drive.google.com/file/d/...\nhttps://drive.google.com/uc?export=view&id=...",
-                        key=f"gambar_{row['id']}"
-                    )
-                    status = st.selectbox("Status", 
-                                          ["Belum Diisi", "Proses", "Selesai"], 
-                                          index=["Belum Diisi", "Proses", "Selesai"].index(row['status'] if pd.notna(row['status']) else "Belum Diisi"),
-                                          key=f"status_{row['id']}")
-                    submitted = st.form_submit_button("Simpan Resume")
-                    if submitted:
-                        # Proses simpan ke dataframe (sama seperti sebelumnya)
-                        df = pd.read_csv(RAPAT_DB)
-                        idx = df[df['id'] == row['id']].index[0]
-                        df.at[idx, 'ringkasan_indikator'] = ringkasan   # simpan ringkasan yang mungkin sudah diedit (atau fresh)
-                        df.at[idx, 'resume'] = resume
-                        df.at[idx, 'action_items'] = action
-                        # Konversi link gambar
-                        import re
-                        links = gambar_dok.strip().split('\n')
-                        direct_links = []
-                        for link in links:
-                            link = link.strip()
-                            if not link:
-                                continue
-                            match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
-                            if match:
-                                file_id = match.group(1)
-                                direct_link = f"https://drive.google.com/uc?export=view&id={file_id}"
-                                direct_links.append(direct_link)
-                            else:
-                                direct_links.append(link)
-                        gambar_dok_bersih = "\n".join(direct_links)
-                        df.at[idx, 'gambar_dokumentasi'] = gambar_dok_bersih
-                        df.at[idx, 'status'] = status
-                        df.at[idx, 'last_editor'] = st.session_state.username
-                        df.to_csv(RAPAT_DB, index=False)
-                        st.success("Resume berhasil disimpan!")
-                        st.rerun()
-                
+                form_isi_resume_pegawai(row)
                 st.markdown("---")
                 if st.button("📄 Export PDF", key=f"pdf_pegawai_{row['id']}"):
-                    # Pastikan row yang digunakan sudah yang terbaru? Bisa reload dulu
                     df_terbaru = pd.read_csv(RAPAT_DB)
                     row_terbaru = df_terbaru[df_terbaru['id'] == row['id']].iloc[0]
                     pdf_bytes = generate_pdf_resume(row_terbaru)
@@ -1647,7 +1577,7 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
                         file_name=f"resume_rapat_{row['id']}.pdf",
                         mime="application/pdf",
                         key=f"download_pegawai_{row['id']}"
-                    )         
+                    )
 
 # ======================= REKAPAN IPH (Data Ringkasan) =======================
 if menu == "Rekapan IPH":
