@@ -299,6 +299,10 @@ def check_login(name, pwd):
     return None
 init_db()
 
+df = pd.read_csv('iph_analisis.csv')
+df['komoditas_andil'] = df['komoditas_andil'].apply(lambda x: '|'.join([k.strip().upper() for k in x.split('|')]))
+df.to_csv('iph_analisis.csv', index=False)
+
 # --- INISIALISASI DATABASE ---
 RAPAT_DB = "rapat_tpid.csv"
 IPH_DB = "data_iph_harian.csv"
@@ -412,7 +416,7 @@ def generate_ringkasan_indikator(tahun, bulan, minggu_ke):
     else:
         jenis = "stabil"
     
-    kom_list = row['komoditas_andil'].split("|")
+    kom_list = [k.strip().upper() for k in row['komoditas_andil'].split("|")]
     nilai_list = [float(x) if x.strip() else 0.0 for x in row['nilai_andil'].split("|")]
     
     # Komoditas andil (tanpa %)
@@ -627,16 +631,20 @@ def generate_pdf_resume(row):
             session.headers.update({'User-Agent': 'Mozilla/5.0'})
             
             for idx, link in enumerate(gambar_links, start=1):
+                # CEK APAKAH MASIH ADA RUANG VERTIKAL YANG CUKUP
+                if current_y + img_h > pdf.h - pdf.b_margin:
+                    pdf.add_page()                # tambah halaman baru
+                    current_y = pdf.t_margin      # reset Y ke margin atas
+                    current_x = start_x           # reset X ke margin kiri
+                    count_in_row = 0              # reset jumlah gambar dalam baris
+                
                 try:
                     resp = session.get(link, timeout=15)
                     if resp.status_code == 200 and 'image' in resp.headers.get('Content-Type', ''):
                         img_data = BytesIO(resp.content)
-                        # Tempatkan gambar di posisi saat ini
                         pdf.image(img_data, x=current_x, y=current_y, w=img_w)
                         count_in_row += 1
-                        # Pindah ke kanan untuk gambar berikutnya
                         current_x += img_w + margin_x
-                        # Jika sudah 2 gambar, pindah ke baris baru
                         if count_in_row == 2:
                             current_x = start_x
                             current_y += img_h + margin_y
@@ -647,7 +655,6 @@ def generate_pdf_resume(row):
                     pdf.set_font("Times", 'I', 9)
                     pdf.set_xy(current_x, current_y)
                     pdf.cell(img_w, 6, f"(Gambar {idx} gagal)", ln=True)
-                    # Tetap majukan posisi agar tidak bertumpuk
                     current_x += img_w + margin_x
                     if count_in_row == 2:
                         current_x = start_x
@@ -1059,9 +1066,9 @@ if st.session_state.user_role == "Publik_Shared":
         df_th = df[df['tahun'] == th]
         freq = {}
         for _, row in df_th.iterrows():
-            kom_list = row['komoditas_andil'].split("|")
+            kom_list = [k.strip().upper() for k in row['komoditas_andil'].split("|")]
             for kom in kom_list:
-                kom = kom.strip()
+                kom = kom.strip().upper()
                 freq[kom] = freq.get(kom, 0) + 1
         freq_dict[th] = freq
     
@@ -1358,13 +1365,21 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                     link_bahan = st.text_input("Link Bahan Materi", value=row['link_bahan_materi'] if pd.notna(row['link_bahan_materi']) else "", key=f"bahan_{row['id']}_{idx}")
                     link_dok = st.text_input("Link Dokumentasi", value=row['link_dokumentasi'] if pd.notna(row['link_dokumentasi']) else "", key=f"dok_{row['id']}_{idx}")
                     update_slot = st.form_submit_button("Update Rapat")
-                    if update_slot:
-                        df = pd.read_csv(RAPAT_DB)
-                        df.loc[df['id'] == row['id'], ['tanggal', 'pegawai', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi']] = [tgl, " || ".join(pegawai_edit), link_und, link_bahan, link_dok]
-                        df.to_csv(RAPAT_DB, index=False)
-                        buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
-                        st.success("Rapat diupdate!")
-                        st.rerun()
+                if update_slot:
+                    # Hitung ulang ringkasan indikator berdasarkan tanggal baru
+                    tahun_baru = tgl.year
+                    bulan_baru = tgl.month
+                    minggu_baru = get_minggu_dari_tanggal(tgl)
+                    ringkasan_baru = generate_ringkasan_indikator(tahun_baru, bulan_baru, minggu_baru)
+
+                    df = pd.read_csv(RAPAT_DB)
+                    df.loc[df['id'] == row['id'], ['tanggal', 'pegawai', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi', 'ringkasan_indikator']] = [
+                        tgl, " || ".join(pegawai_edit), link_und, link_bahan, link_dok, ringkasan_baru
+                    ]
+                    df.to_csv(RAPAT_DB, index=False)
+                    buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
+                    st.success("Rapat diupdate! Ringkasan indikator diperbarui sesuai tanggal baru.")
+                    st.rerun()
                 if st.button(f"🗑️ Hapus Rapat", key=f"hapus_{row['id']}_{idx}"):
                     df_temp = pd.read_csv(RAPAT_DB)
                     df_temp = df_temp[df_temp['id'] != row['id']]
@@ -1443,43 +1458,64 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Pegawai":
     
     st.subheader("Daftar Pegawai Saat Ini")
     st.write(load_pegawai())
-    st.markdown("---")
-    st.subheader("Database Pengguna")
-    if os.path.exists(USER_DB):
-        with open(USER_DB, "rb") as f:
-            st.download_button(
-                label="📥 Unduh users_list.csv",
-                data=f,
-                file_name="users_list.csv",
-                mime="text/csv",
-                key="download_users_db"
-            )
-    else:
-        st.warning("File users_list.csv tidak ditemukan.")    
 
 # ======================= PEGAWAI: ISI RESUME RAPAT =======================
 def form_isi_resume_pegawai(row):
+    tgl_rapat = pd.to_datetime(row['tanggal'])
+    ringkasan_fresh = generate_ringkasan_indikator(
+        tgl_rapat.year, 
+        tgl_rapat.month, 
+        get_minggu_dari_tanggal(tgl_rapat)
+    )
+    
+    # Tampilkan pratinjau agar user bisa melihat format yang benar (dengan enter)
+    st.markdown("**Ringkasan Indikator (pratinjau):**")
+    st.code(ringkasan_fresh, language='text')
+    
     with st.form(f"form_resume_pegawai_{row['id']}"):
-        ringkasan = st.text_area("Ringkasan awal", value=row['ringkasan_indikator'] if pd.notna(row['ringkasan_indikator']) else "", height=100)
-        resume = st.text_area("Resume Hasil Rapat", value=row['resume'] if pd.notna(row['resume']) else "", height=150)
-        action = st.text_area("Action Items", value=row['action_items'] if pd.notna(row['action_items']) else "", height=100)
+        ringkasan = st.text_area(
+            "Edit Ringkasan (jika perlu)", 
+            value=ringkasan_fresh, 
+            height=200,
+            key=f"ringkasan_{row['id']}"
+        )
+        resume = st.text_area(
+            "Resume Hasil Rapat", 
+            value=row['resume'] if pd.notna(row['resume']) else "", 
+            height=150,
+            key=f"resume_{row['id']}"
+        )
+        action = st.text_area(
+            "Action Items", 
+            value=row['action_items'] if pd.notna(row['action_items']) else "", 
+            height=100,
+            key=f"action_{row['id']}"
+        )
         old_val = row['gambar_dokumentasi'] if pd.notna(row.get('gambar_dokumentasi')) else ""
         gambar_dok = st.text_area(
             "Link Gambar Dokumentasi (satu link per baris)",
             value=old_val,
             height=100,
-            help="Tempel link Google Drive apa adanya (biasa atau direct). Sistem akan otomatis mengubahnya.",
-            placeholder="https://drive.google.com/file/d/...\nhttps://drive.google.com/uc?export=view&id=..."
+            key=f"gambar_{row['id']}"
         )
-        status = st.selectbox("Status", ["Belum Diisi", "Proses", "Selesai"], index=["Belum Diisi", "Proses", "Selesai"].index(row['status'] if pd.notna(row['status']) else "Belum Diisi"))
+        status = st.selectbox(
+            "Status", 
+            ["Belum Diisi", "Proses", "Selesai"], 
+            index=["Belum Diisi", "Proses", "Selesai"].index(
+                row['status'] if pd.notna(row['status']) else "Belum Diisi"
+            ),
+            key=f"status_{row['id']}"
+        )
         submitted = st.form_submit_button("Simpan Resume")
+        
         if submitted:
             df = pd.read_csv(RAPAT_DB)
             idx = df[df['id'] == row['id']].index[0]
-            df.at[idx, 'ringkasan_indikator'] = ringkasan
+            df.at[idx, 'ringkasan_indikator'] = ringkasan  # ringkasan sudah mengandung \n
             df.at[idx, 'resume'] = resume
             df.at[idx, 'action_items'] = action
-            # Konversi semua link ke direct link
+            
+            # Konversi link gambar (sama seperti kode asli Anda)
             import re
             links = gambar_dok.strip().split('\n')
             direct_links = []
@@ -1487,14 +1523,12 @@ def form_isi_resume_pegawai(row):
                 link = link.strip()
                 if not link:
                     continue
-                # Cari pola /file/d/ID/
                 match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
                 if match:
                     file_id = match.group(1)
                     direct_link = f"https://drive.google.com/uc?export=view&id={file_id}"
                     direct_links.append(direct_link)
                 else:
-                    # Biarkan jika sudah direct link
                     direct_links.append(link)
             gambar_dok_bersih = "\n".join(direct_links)
             
@@ -1502,6 +1536,7 @@ def form_isi_resume_pegawai(row):
             df.at[idx, 'status'] = status
             df.at[idx, 'last_editor'] = st.session_state.username
             df.to_csv(RAPAT_DB, index=False)
+            
             st.success("Resume berhasil disimpan!")
             st.rerun()
 
@@ -1525,17 +1560,82 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
                 st.markdown(f"**Link Bahan:** {row['link_bahan_materi']}")
                 st.markdown(f"**Upload Dokumentasi di Tautan Berikut:** {row['link_dokumentasi']}")
                 st.markdown("---")
-                form_isi_resume_pegawai(row)
+                
+                # ========== AMBIL RINGKASAN INDIKATOR TERBARU ==========
+                tgl_rapat = pd.to_datetime(row['tanggal'])
+                tahun_rapat = tgl_rapat.year
+                bulan_rapat = tgl_rapat.month
+                minggu_rapat = get_minggu_dari_tanggal(tgl_rapat)
+                ringkasan_fresh = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat)
+                # ===================================================
+                
+                with st.form(f"form_resume_pegawai_{row['id']}"):
+                    # Gunakan ringkasan_fresh sebagai nilai default, bukan row['ringkasan_indikator']
+                    ringkasan = st.text_area("Ringkasan Indikator (berdasarkan data IPH terbaru)", 
+                                             value=ringkasan_fresh, height=100, key=f"ringkasan_{row['id']}")
+                    resume = st.text_area("Resume Hasil Rapat", 
+                                          value=row['resume'] if pd.notna(row['resume']) else "", 
+                                          height=150, key=f"resume_{row['id']}")
+                    action = st.text_area("Action Items", 
+                                          value=row['action_items'] if pd.notna(row['action_items']) else "", 
+                                          height=100, key=f"action_{row['id']}")
+                    old_val = row['gambar_dokumentasi'] if pd.notna(row.get('gambar_dokumentasi')) else ""
+                    gambar_dok = st.text_area(
+                        "Link Gambar Dokumentasi (satu link per baris)",
+                        value=old_val,
+                        height=100,
+                        help="Tempel link Google Drive apa adanya (biasa atau direct). Sistem akan otomatis mengubahnya.",
+                        placeholder="https://drive.google.com/file/d/...\nhttps://drive.google.com/uc?export=view&id=...",
+                        key=f"gambar_{row['id']}"
+                    )
+                    status = st.selectbox("Status", 
+                                          ["Belum Diisi", "Proses", "Selesai"], 
+                                          index=["Belum Diisi", "Proses", "Selesai"].index(row['status'] if pd.notna(row['status']) else "Belum Diisi"),
+                                          key=f"status_{row['id']}")
+                    submitted = st.form_submit_button("Simpan Resume")
+                    if submitted:
+                        # Proses simpan ke dataframe (sama seperti sebelumnya)
+                        df = pd.read_csv(RAPAT_DB)
+                        idx = df[df['id'] == row['id']].index[0]
+                        df.at[idx, 'ringkasan_indikator'] = ringkasan   # simpan ringkasan yang mungkin sudah diedit (atau fresh)
+                        df.at[idx, 'resume'] = resume
+                        df.at[idx, 'action_items'] = action
+                        # Konversi link gambar
+                        import re
+                        links = gambar_dok.strip().split('\n')
+                        direct_links = []
+                        for link in links:
+                            link = link.strip()
+                            if not link:
+                                continue
+                            match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', link)
+                            if match:
+                                file_id = match.group(1)
+                                direct_link = f"https://drive.google.com/uc?export=view&id={file_id}"
+                                direct_links.append(direct_link)
+                            else:
+                                direct_links.append(link)
+                        gambar_dok_bersih = "\n".join(direct_links)
+                        df.at[idx, 'gambar_dokumentasi'] = gambar_dok_bersih
+                        df.at[idx, 'status'] = status
+                        df.at[idx, 'last_editor'] = st.session_state.username
+                        df.to_csv(RAPAT_DB, index=False)
+                        st.success("Resume berhasil disimpan!")
+                        st.rerun()
+                
                 st.markdown("---")
-            if st.button("📄 Export PDF", key=f"pdf_pegawai_{row['id']}"):
-                pdf_bytes = generate_pdf_resume(row)
-                st.download_button(
-                    label="📥 Unduh PDF",
-                    data=pdf_bytes,
-                    file_name=f"resume_rapat_{row['id']}.pdf",
-                    mime="application/pdf",
-                    key=f"download_pegawai_{row['id']}"
-                )            
+                if st.button("📄 Export PDF", key=f"pdf_pegawai_{row['id']}"):
+                    # Pastikan row yang digunakan sudah yang terbaru? Bisa reload dulu
+                    df_terbaru = pd.read_csv(RAPAT_DB)
+                    row_terbaru = df_terbaru[df_terbaru['id'] == row['id']].iloc[0]
+                    pdf_bytes = generate_pdf_resume(row_terbaru)
+                    st.download_button(
+                        label="📥 Unduh PDF",
+                        data=pdf_bytes,
+                        file_name=f"resume_rapat_{row['id']}.pdf",
+                        mime="application/pdf",
+                        key=f"download_pegawai_{row['id']}"
+                    )         
 
 # ======================= REKAPAN IPH (Data Ringkasan) =======================
 if menu == "Rekapan IPH":
@@ -1599,11 +1699,10 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
     
     # ========== TAB 1: INPUT MANUAL (KODE ASLI ANDA) ==========
     with tab1:
-        # Inisialisasi key form untuk reset
+        # Inisialisasi form_key untuk reset form setelah submit
         if 'form_key' not in st.session_state:
             st.session_state.form_key = 0
-        
-        # Ambil daftar komoditas master
+
         komoditas_master = get_komoditas_list()
         if not komoditas_master:
             st.warning("Belum ada komoditas. Silakan tambah komoditas terlebih dahulu.")
@@ -1613,54 +1712,69 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
                     if kom_baru and add_komoditas(kom_baru):
                         st.rerun()
             st.stop()
-        
-        # Tentukan default komoditas (3 komoditas pertama)
+
+        # Default komoditas
         default_kom1 = komoditas_master[0]
         default_kom2 = komoditas_master[1] if len(komoditas_master) > 1 else komoditas_master[0]
         default_kom3 = komoditas_master[2] if len(komoditas_master) > 2 else komoditas_master[0]
         default_fluk = komoditas_master[0]
-        
-        # Form dengan key dinamis
+
+        # ========== SELECTBOX DI LUAR FORM (AGAR LABEL LANGSUNG BERUBAH) ==========
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            kom1 = st.selectbox("Komoditas 1", komoditas_master,
+                                index=komoditas_master.index(default_kom1),
+                                key="kom1_sel")
+        with col2:
+            kom2 = st.selectbox("Komoditas 2", komoditas_master,
+                                index=komoditas_master.index(default_kom2),
+                                key="kom2_sel")
+        with col3:
+            kom3 = st.selectbox("Komoditas 3", komoditas_master,
+                                index=komoditas_master.index(default_kom3),
+                                key="kom3_sel")
+
+        fluk_kom = st.selectbox("Komoditas Fluktuasi", komoditas_master,
+                                index=komoditas_master.index(default_fluk),
+                                key="fluk_kom_sel")
+
+        # ========== FORM DENGAN KEY DINAMIS ==========
         with st.form(key=f"iph_form_{st.session_state.form_key}"):
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                tahun = st.number_input("Tahun", min_value=2020, max_value=2030, value=datetime.now().year)
-            with col2:
-                bulan = st.selectbox("Bulan", range(1,13), format_func=lambda x: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][x-1], index=datetime.now().month-1)
-            with col3:
-                minggu = st.number_input("Minggu ke-", min_value=1, max_value=5, value=1)
-            
-            # Indikator: text_input agar bebas desimal
-            indikator_str = st.text_input("Indikator Perubahan Harga (%)", value="0", help="Gunakan titik sebagai desimal (contoh: -1.34 atau 2.5678)")
-            
-            st.markdown("### Tiga Komoditas Andil Perubahan Harga")
-            col_kom1, col_kom2, col_kom3 = st.columns(3)
-            with col_kom1:
-                kom1 = st.selectbox("Komoditas 1", komoditas_master, index=komoditas_master.index(default_kom1))
-            with col_kom2:
-                kom2 = st.selectbox("Komoditas 2", komoditas_master, index=komoditas_master.index(default_kom2))
-            with col_kom3:
-                kom3 = st.selectbox("Komoditas 3", komoditas_master, index=komoditas_master.index(default_kom3))
-            
-            col_nil1, col_nil2, col_nil3 = st.columns(3)
-            with col_nil1:
-                nilai1_str = st.text_input(f"Nilai {kom1} (%)", value="0", help="Contoh: -0.773 atau 0.333")
-            with col_nil2:
-                nilai2_str = st.text_input(f"Nilai {kom2} (%)", value="0")
-            with col_nil3:
-                nilai3_str = st.text_input(f"Nilai {kom3} (%)", value="0")
-            
-            st.markdown("### Fluktuasi Harga Tertinggi")
-            col_fluk1, col_fluk2 = st.columns(2)
-            with col_fluk1:
-                fluk_kom = st.selectbox("Komoditas", komoditas_master, index=komoditas_master.index(default_fluk))
-            with col_fluk2:
-                fluk_nilai_str = st.text_input("Nilai Fluktuasi", value="0", help="Contoh: 0.0553 atau 0.0329914")
-            
-            submitted = st.form_submit_button("Simpan Data", type="primary", use_container_width=True)
-            
+            col_t1, col_t2, col_t3 = st.columns(3)
+            with col_t1:
+                tahun = st.number_input("Tahun", min_value=2020, max_value=2030,
+                                        value=datetime.now().year, key="tahun_input")
+            with col_t2:
+                bulan = st.selectbox("Bulan", range(1,13),
+                                    format_func=lambda x: ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'][x-1],
+                                    index=datetime.now().month-1, key="bulan_input")
+            with col_t3:
+                minggu = st.number_input("Minggu ke-", min_value=1, max_value=5,
+                                        value=1, key="minggu_input")
+
+            indikator_str = st.text_input("Indikator Perubahan Harga (%)", value="0",
+                                        key="indikator_input")
+
+            # Tiga kolom nilai dengan key UNIK (menggunakan form_key)
+            col_n1, col_n2, col_n3 = st.columns(3)
+            with col_n1:
+                nilai1_str = st.text_input(f"Nilai {kom1} (%)", value="0",
+                                        key=f"nilai1_{st.session_state.form_key}")
+            with col_n2:
+                nilai2_str = st.text_input(f"Nilai {kom2} (%)", value="0",
+                                        key=f"nilai2_{st.session_state.form_key}")
+            with col_n3:
+                nilai3_str = st.text_input(f"Nilai {kom3} (%)", value="0",
+                                        key=f"nilai3_{st.session_state.form_key}")
+
+            fluk_nilai_str = st.text_input(f"Nilai Fluktuasi {fluk_kom} (%)", value="0",
+                                        key=f"fluk_nilai_{st.session_state.form_key}")
+
+            # Tombol submit (WAJIB ADA)
+            submitted = st.form_submit_button("Simpan Data", use_container_width=True)
+
             if submitted:
-                # Konversi string ke float (ganti koma dengan titik)
+                # Konversi nilai (ganti koma dengan titik)
                 try:
                     indikator = float(indikator_str.replace(',', '.'))
                 except:
@@ -1681,17 +1795,18 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
                     fluk_nilai = float(fluk_nilai_str.replace(',', '.'))
                 except:
                     fluk_nilai = 0.0
-                
+
                 analisis_file = "iph_analisis.csv"
-                # Baca existing data
+                # Baca data existing
                 if os.path.exists(analisis_file) and os.path.getsize(analisis_file) > 0:
                     df_existing = pd.read_csv(analisis_file)
-                    # Hapus periode yang sama
-                    df_existing = df_existing[~((df_existing['tahun']==tahun) & (df_existing['bulan']==bulan) & (df_existing['minggu_ke']==minggu))]
+                    # Hapus periode yang sama (jika ada)
+                    df_existing = df_existing[~((df_existing['tahun'] == tahun) &
+                                                (df_existing['bulan'] == bulan) &
+                                                (df_existing['minggu_ke'] == minggu))]
                 else:
                     df_existing = pd.DataFrame()
-                
-                # Data baru
+
                 new_data = pd.DataFrame([{
                     'tahun': tahun,
                     'bulan': bulan,
@@ -1703,12 +1818,12 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
                     'fluktuasi_nilai': fluk_nilai,
                     'last_updated': datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }])
+
                 df_combined = pd.concat([df_existing, new_data], ignore_index=True)
                 df_combined.to_csv(analisis_file, index=False)
-                
-                # Notifikasi toast (akan muncul dan tidak langsung hilang karena rerun)
+
                 st.toast("✅ Data berhasil disimpan!", icon="✅")
-                # Reset form dengan mengubah key
+                # Reset form agar key berubah dan field kosong kembali
                 st.session_state.form_key += 1
                 st.rerun()
         
@@ -2009,9 +2124,9 @@ if menu == "Visualisasi IPH":
             df_th = df[df['tahun'] == th]
             freq = {}
             for _, row in df_th.iterrows():
-                kom_list = row['komoditas_andil'].split("|")
+                kom_list = [k.strip().upper() for k in row['komoditas_andil'].split("|")]
                 for kom in kom_list:
-                    kom = kom.strip()
+                    kom = kom.strip().upper()
                     freq[kom] = freq.get(kom, 0) + 1
             freq_dict[th] = freq
         
