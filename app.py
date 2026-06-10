@@ -8,7 +8,6 @@ import base64
 import plotly.graph_objects as go
 import numpy as np
 from plotly.subplots import make_subplots
-import shutil
 
 # --- KONFIGURASI HALAMAN ---
 st.set_page_config(
@@ -144,6 +143,7 @@ def check_login(name, pwd):
         return user.iloc[0]['role']
     return None
 def login_page():
+    # Jika sudah masuk via Magic Link, jangan tampilkan form login
     if st.session_state.get("user_role") == "Publik_Shared":
         return
 init_db()
@@ -180,53 +180,23 @@ if not os.path.exists(NOTIF_DB):
     df_notif = pd.DataFrame(columns=["id_rapat", "pegawai", "pesan", "dibaca", "tanggal"])
     df_notif.to_csv(NOTIF_DB, index=False)
 
-# ======================= FUNGSI PENYIMPANAN AMAN (TAMBAHAN, TIDAK MENGUBAH TAMPILAN) =======================
-def safe_save_csv(df, filepath):
-    """Menyimpan DataFrame ke CSV dengan backup otomatis."""
-    if os.path.exists(filepath):
-        backup_path = filepath + ".backup"
-        try:
-            shutil.copy2(filepath, backup_path)
-        except:
-            pass
-    temp_path = filepath + ".tmp"
-    try:
-        df.to_csv(temp_path, index=False)
-        shutil.move(temp_path, filepath)
-        return True
-    except:
-        return False
-
-def safe_load_csv(filepath, default_columns=None):
-    """Memuat CSV, fallback ke backup jika rusak."""
-    if not os.path.exists(filepath):
-        if default_columns is not None:
-            return pd.DataFrame(columns=default_columns)
-        return pd.DataFrame()
-    try:
-        return pd.read_csv(filepath)
-    except:
-        backup_path = filepath + ".backup"
-        if os.path.exists(backup_path):
-            try:
-                return pd.read_csv(backup_path)
-            except:
-                pass
-        if default_columns is not None:
-            return pd.DataFrame(columns=default_columns)
-        return pd.DataFrame()
-
-# --- FUNGSI BANTU (dengan safe load) ---
+# --- FUNGSI BANTU ---
 def get_minggu_dari_tanggal(tanggal):
+    """Menentukan minggu ke-1 s.d 5 berdasarkan tanggal"""
     day = tanggal.day
-    if day <= 7: return 1
-    elif day <= 14: return 2
-    elif day <= 21: return 3
-    elif day <= 28: return 4
-    else: return 5
+    if day <= 7:
+        return 1
+    elif day <= 14:
+        return 2
+    elif day <= 21:
+        return 3
+    elif day <= 28:
+        return 4
+    else:
+        return 5
 
 def get_previous_price(tahun, bulan, minggu_ke, komoditas):
-    df = safe_load_csv(IPH_DB)
+    df = pd.read_csv(IPH_DB)
     prev_minggu = minggu_ke - 1
     if prev_minggu < 1:
         return None
@@ -236,21 +206,28 @@ def get_previous_price(tahun, bulan, minggu_ke, komoditas):
     return None
 
 def generate_ringkasan_indikator(tahun, bulan, minggu_ke, df_iph):
+    """Generate teks ringkasan indikator dengan mengambil data minggu sebelumnya dari bulan/tahun sebelumnya"""
     data_periode = df_iph[(df_iph['tahun']==tahun) & (df_iph['bulan']==bulan) & (df_iph['minggu_ke']==minggu_ke)]
     if data_periode.empty:
         return "Data tidak tersedia untuk periode ini."
+    
+    # Cari data minggu sebelumnya (bisa dari bulan sebelumnya atau tahun sebelumnya)
     prev_tahun = tahun
     prev_bulan = bulan
     prev_minggu = minggu_ke - 1
+    
     if prev_minggu < 1:
+        # Pindah ke bulan sebelumnya
         if prev_bulan > 1:
             prev_bulan -= 1
+            # Cari minggu terakhir di bulan sebelumnya
             data_prev_bulan = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan)]
             if not data_prev_bulan.empty:
                 prev_minggu = data_prev_bulan['minggu_ke'].max()
             else:
                 prev_minggu = None
         else:
+            # Bulan Januari, pindah ke tahun sebelumnya
             prev_tahun -= 1
             prev_bulan = 12
             data_prev_bulan = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan)]
@@ -258,39 +235,48 @@ def generate_ringkasan_indikator(tahun, bulan, minggu_ke, df_iph):
                 prev_minggu = data_prev_bulan['minggu_ke'].max()
             else:
                 prev_minggu = None
+    
     if prev_minggu is None:
         return "Data minggu sebelumnya tidak tersedia."
+    
     data_prev = df_iph[(df_iph['tahun']==prev_tahun) & (df_iph['bulan']==prev_bulan) & (df_iph['minggu_ke']==prev_minggu)]
+    
     if data_prev.empty:
         return f"Data minggu sebelumnya (minggu ke-{prev_minggu} {prev_bulan}/{prev_tahun}) tidak tersedia."
+    
+    # Hitung perubahan
     merged = data_periode.merge(data_prev[['komoditas','harga']], on='komoditas', suffixes=('', '_prev'))
     merged['perubahan'] = ((merged['harga'] - merged['harga_prev']) / merged['harga_prev']) * 100
     rata_perubahan = merged['perubahan'].mean()
+    
     if rata_perubahan >= 0:
         jenis = "inflasi"
         top3 = merged.nlargest(3, 'perubahan')[['komoditas', 'perubahan']]
     else:
         jenis = "deflasi"
         top3 = merged.nsmallest(3, 'perubahan')[['komoditas', 'perubahan']]
+    
     def format_angka(x, desimal=4):
         return f"{x:.{desimal}f}".replace('.', ',')
+    
     rata_str = format_angka(rata_perubahan, 2)
+    
     def format_komoditas(kom):
         return kom.title()
+    
     andil_list = []
     for i, (_, row) in enumerate(top3.iterrows(), 1):
         kom = format_komoditas(row['komoditas'])
         perubahan = row['perubahan']
         andil_list.append(f"{i}. {kom} ({format_angka(perubahan, 4)}), ")
     andil_str = "\n".join(andil_list)
+    
     bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][bulan-1]
     ringkasan = f"Berikut kami sampaikan IPH Kota Batu minggu ke-{minggu_ke} {bulan_nama} {tahun}. Kota Batu mengalami {jenis} sebesar {rata_str}\n\nBerikut adalah komoditi yg menyumbang andil terbesar\n{andil_str}"
     return ringkasan
 
 def update_persen_change():
-    df = safe_load_csv(IPH_DB)
-    if df.empty:
-        return
+    df = pd.read_csv(IPH_DB)
     for idx, row in df.iterrows():
         prev_harga = get_previous_price(row['tahun'], row['bulan'], row['minggu_ke'], row['komoditas'])
         if prev_harga and prev_harga != 0:
@@ -298,10 +284,10 @@ def update_persen_change():
             df.at[idx, 'persen_change'] = round(perubahan, 2)
         else:
             df.at[idx, 'persen_change'] = 0
-    safe_save_csv(df, IPH_DB)
+    df.to_csv(IPH_DB, index=False)
 
 def save_iph_data(tahun, bulan, minggu_ke, komoditas_list, harga_list):
-    df = safe_load_csv(IPH_DB)
+    df = pd.read_csv(IPH_DB)
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for komoditas, harga in zip(komoditas_list, harga_list):
         existing = df[(df['tahun'] == tahun) & (df['bulan'] == bulan) & (df['minggu_ke'] == minggu_ke) & (df['komoditas'] == komoditas)]
@@ -312,24 +298,24 @@ def save_iph_data(tahun, bulan, minggu_ke, komoditas_list, harga_list):
         else:
             new_row = pd.DataFrame([{'tahun': tahun, 'bulan': bulan, 'minggu_ke': minggu_ke, 'komoditas': komoditas, 'harga': harga, 'persen_change': 0, 'last_updated': now_str}])
             df = pd.concat([df, new_row], ignore_index=True)
-    if safe_save_csv(df, IPH_DB):
-        update_persen_change()
+    df.to_csv(IPH_DB, index=False)
+    update_persen_change()
 
 def get_komoditas_list():
-    df = safe_load_csv(KOMODITAS_DB)
+    df = pd.read_csv(KOMODITAS_DB)
     return df['komoditas'].tolist()
 
 def add_komoditas(nama_baru):
-    df = safe_load_csv(KOMODITAS_DB)
+    df = pd.read_csv(KOMODITAS_DB)
     if nama_baru.upper() not in df['komoditas'].str.upper().tolist():
         new = pd.DataFrame({'komoditas': [nama_baru.upper()]})
-        df = pd.concat([df, new], ignore_index=True)
-        return safe_save_csv(df, KOMODITAS_DB)
+        pd.concat([df, new], ignore_index=True).to_csv(KOMODITAS_DB, index=False)
+        return True
     return False
 
-# --- FUNGSI NOTIFIKASI (dengan safe load) ---
+# --- FUNGSI NOTIFIKASI ---
 def buat_notifikasi(id_rapat, daftar_pegawai, tanggal):
-    df_notif = safe_load_csv(NOTIF_DB)
+    df_notif = pd.read_csv(NOTIF_DB)
     for peg in daftar_pegawai:
         if not ((df_notif['id_rapat'] == id_rapat) & (df_notif['pegawai'] == peg)).any():
             new_notif = pd.DataFrame([{
@@ -340,18 +326,19 @@ def buat_notifikasi(id_rapat, daftar_pegawai, tanggal):
                 "tanggal": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }])
             df_notif = pd.concat([df_notif, new_notif], ignore_index=True)
-    safe_save_csv(df_notif, NOTIF_DB)
+    df_notif.to_csv(NOTIF_DB, index=False)
 
 def get_notifikasi(pegawai):
-    df = safe_load_csv(NOTIF_DB)
+    df = pd.read_csv(NOTIF_DB)
     return df[df['pegawai'] == pegawai]
 
 def tandai_baca(id_rapat, pegawai):
-    df = safe_load_csv(NOTIF_DB)
+    df = pd.read_csv(NOTIF_DB)
     df.loc[(df['id_rapat'] == id_rapat) & (df['pegawai'] == pegawai), 'dibaca'] = True
-    safe_save_csv(df, NOTIF_DB)
+    df.to_csv(NOTIF_DB, index=False)
 
 # --- SESSION STATE LOGIN ---
+# Cek apakah ada parameter 'view=shared' di URL
 query_params = st.query_params
 if query_params.get("view") == "shared":
     st.session_state.logged_in = True
@@ -403,6 +390,7 @@ if not st.session_state.logged_in:
         tab_login, tab_register = st.tabs(["🔑 Login", "📝 Register"])
         with tab_login:
             with st.form("login_form"):
+                # Pilihan username: admin + semua pegawai
                 user_options = ["admin"] + DAFTAR_PEGAWAI
                 user_input = st.selectbox("Pilih Username", user_options)
                 pass_input = st.text_input("Password", type="password")
@@ -410,6 +398,7 @@ if not st.session_state.logged_in:
                 if submitted:
                     role = check_login(user_input, pass_input)
                     if role:
+                        # Jika memilih admin, pastikan role-nya Admin
                         if user_input == "admin" and role != "Admin":
                             st.error("Akun admin tidak valid.")
                         else:
@@ -464,6 +453,7 @@ st.sidebar.markdown(logo_html_sidebar, unsafe_allow_html=True)
 st.sidebar.markdown(f"<div style='text-align:center;'><strong>{st.session_state.username}</strong><br><span style='background:#e2e8f0; padding:2px 8px; border-radius:20px;'>{st.session_state.user_role}</span></div>", unsafe_allow_html=True)
 st.sidebar.markdown("---")
 
+# Notifikasi untuk pegawai
 if st.session_state.user_role == "Pegawai":
     notif_df = get_notifikasi(st.session_state.username)
     notif_belum = notif_df[notif_df['dibaca'] == False]
@@ -479,15 +469,18 @@ if st.session_state.user_role == "Pegawai":
 
         st.sidebar.markdown("---")
 
+# Menu berdasarkan role (tanpa duplikasi)
 if st.session_state.user_role == "Admin":
     menu = st.sidebar.radio("Navigasi", ["Beranda", "Kelola Rapat", "Input Rekap IPH", "Rekapan IPH", "Visualisasi IPH", "Analisis IPH", "Monitoring Resume"])
 elif st.session_state.user_role == "Pegawai":
     menu = st.sidebar.radio("Navigasi", ["Beranda", "Isi Resume Rapat", "Input Rekap IPH", "Rekapan IPH", "Visualisasi IPH", "Analisis IPH"])
 elif st.session_state.user_role == "Publik_Shared":
+    # Mode publik tanpa menu, langsung ke visualisasi dengan parameter dari URL
     menu = "Visualisasi IPH"
 else:
     menu = st.sidebar.radio("Navigasi", ["Beranda", "Visualisasi IPH", "Lihat Rapat"])
 
+# Tombol logout hanya untuk yang bukan Publik_Shared
 if st.session_state.user_role != "Publik_Shared":
     if st.sidebar.button("Logout", use_container_width=True):
         st.session_state.logged_in = False
@@ -495,28 +488,60 @@ if st.session_state.user_role != "Publik_Shared":
         st.query_params.clear()
         st.rerun()
 
+
+# --- FUNGSI FORM ISI RESUME (untuk admin, tidak dipakai pegawai) ---
+def form_isi_resume(rapat_row, is_admin=False):
+    if not is_admin:
+        daftar_pegawai = [p.strip() for p in rapat_row['pegawai'].split(" || ")] if pd.notna(rapat_row['pegawai']) else []
+        if st.session_state.username not in daftar_pegawai:
+            st.warning("Anda tidak ditugaskan untuk mengisi resume rapat ini.")
+            return
+    with st.form(f"form_resume_{rapat_row['id']}"):
+        ringkasan = st.text_area("Ringkasan awal dari tabel indikator", value=rapat_row['ringkasan_indikator'] if pd.notna(rapat_row['ringkasan_indikator']) else "", height=100)
+        resume = st.text_area("Resume Hasil Rapat", value=rapat_row['resume'] if pd.notna(rapat_row['resume']) else "", height=150)
+        action = st.text_area("Action Items (Tindak Lanjut)", value=rapat_row['action_items'] if pd.notna(rapat_row['action_items']) else "", height=100)
+        status = st.selectbox("Status", ["Belum Diisi", "Proses", "Selesai"], index=["Belum Diisi", "Proses", "Selesai"].index(rapat_row['status'] if pd.notna(rapat_row['status']) else "Belum Diisi"))
+        submitted = st.form_submit_button("Simpan Resume")
+        if submitted:
+            df = pd.read_csv(RAPAT_DB)
+            idx = df[df['id'] == rapat_row['id']].index[0]
+            df.at[idx, 'ringkasan_indikator'] = ringkasan
+            df.at[idx, 'resume'] = resume
+            df.at[idx, 'action_items'] = action
+            df.at[idx, 'status'] = status
+            df.at[idx, 'last_editor'] = st.session_state.username
+            df.to_csv(RAPAT_DB, index=False)
+            st.success("Resume berhasil disimpan!")
+            st.rerun()
+
 # ======================= BERANDA =======================
 if menu == "Beranda":
     st.markdown("<div class='main-header'><h1>Selamat Datang di Dashboard IPH Kota Batu</h1><p>Monitoring inflasi dan rapat TPID</p></div>", unsafe_allow_html=True)
     
-    df_iph = safe_load_csv(IPH_DB)
+    # --- Ambil data IPH terbaru untuk Indeks Perkembangan Harga ---
+    df_iph = pd.read_csv(IPH_DB)
     indeks_text = "-"
     indeks_caption = "Data IPH belum tersedia"
     if not df_iph.empty:
+        # Cari periode terbaru (tahun, bulan, minggu terbesar)
         max_tahun = df_iph['tahun'].max()
         df_tahun = df_iph[df_iph['tahun'] == max_tahun]
         max_bulan = df_tahun['bulan'].max()
         df_bulan = df_tahun[df_tahun['bulan'] == max_bulan]
         max_minggu = df_bulan['minggu_ke'].max()
         data_terbaru = df_bulan[df_bulan['minggu_ke'] == max_minggu]
+        
         if not data_terbaru.empty:
+            # Rata-rata perubahan persen dari data terbaru
             rata_persen = data_terbaru['persen_change'].mean()
+            # Tentukan status
             if rata_persen > 0:
                 status = "Inflasi"
             elif rata_persen < 0:
                 status = "Deflasi"
             else:
                 status = "Stabil"
+            # Format angka dengan koma desimal
             indeks_text = f"{rata_persen:+.2f}%".replace('.', ',')
             bulan_nama = ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][max_bulan-1]
             indeks_caption = f"{status} (Minggu {max_minggu} {bulan_nama} {max_tahun})"
@@ -525,8 +550,7 @@ if menu == "Beranda":
     with col1:
         st.markdown(f"<div class='metric-card'><h3>Indeks Perkembangan Harga</h3><p style='font-size:2rem;'>{indeks_text}</p><p>{indeks_caption}</p></div>", unsafe_allow_html=True)
     with col2:
-        df_rapat_cnt = safe_load_csv(RAPAT_DB)
-        st.markdown("<div class='metric-card'><h3>Rapat TPID</h3><p style='font-size:2rem;'>"+str(len(df_rapat_cnt))+"</p><p>Total rapat</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h3>Rapat TPID</h3><p style='font-size:2rem;'>"+str(len(pd.read_csv(RAPAT_DB)))+"</p><p>Total rapat</p></div>", unsafe_allow_html=True)
     with col3:
         st.markdown("<div class='metric-card'><h3>Pegawai Aktif</h3><p style='font-size:2rem;'>"+str(len(DAFTAR_PEGAWAI))+"</p><p>Anggota tim</p></div>", unsafe_allow_html=True)
     st.markdown("---")
@@ -549,6 +573,7 @@ if menu == "Beranda":
 if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
     st.title("Kelola Rapat TPID")
     
+    # === FORM BUAT RAPAT BARU DENGAN RESET DAN OTOMATIS RINGKASAN ===
     if 'form_key' not in st.session_state:
         st.session_state.form_key = 0
     
@@ -571,13 +596,14 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
             elif not pegawai_terpilih:
                 st.error("Pilih minimal satu pegawai.")
             else:
+                # Generate ringkasan indikator otomatis berdasarkan tanggal rapat
                 tahun_rapat = tanggal.year
                 bulan_rapat = tanggal.month
                 minggu_rapat = get_minggu_dari_tanggal(tanggal)
-                df_iph_rapat = safe_load_csv(IPH_DB)
+                df_iph_rapat = pd.read_csv(IPH_DB)
                 ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat, df_iph_rapat)
                 
-                df = safe_load_csv(RAPAT_DB)
+                df = pd.read_csv(RAPAT_DB)
                 new_id = len(df) + 1 if not df.empty else 1
                 new_row = pd.DataFrame([{
                     "id": new_id, "tanggal": tanggal, "pegawai": " || ".join(pegawai_terpilih),
@@ -587,17 +613,15 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                     "last_editor": st.session_state.username, "created_by": st.session_state.username,
                     "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                 }])
-                df = pd.concat([df, new_row], ignore_index=True)
-                if safe_save_csv(df, RAPAT_DB):
-                    buat_notifikasi(new_id, pegawai_terpilih, tanggal.strftime("%Y-%m-%d"))
-                    st.success(f"Rapat tanggal {tanggal} berhasil dibuat. Notifikasi telah dikirim ke petugas.")
-                    st.session_state.form_key += 1
-                    st.rerun()
-                else:
-                    st.error("Gagal menyimpan rapat.")
+                pd.concat([df, new_row], ignore_index=True).to_csv(RAPAT_DB, index=False)
+                buat_notifikasi(new_id, pegawai_terpilih, tanggal.strftime("%Y-%m-%d"))
+                st.success(f"Rapat tanggal {tanggal} berhasil dibuat. Notifikasi telah dikirim ke petugas.")
+                st.session_state.form_key += 1
+                st.rerun()
     
+    # === DAFTAR RAPAT (TANPA FORM EDIT, HANYA TAMPILAN) ===
     st.subheader("Daftar Rapat")
-    df_rapat = safe_load_csv(RAPAT_DB)
+    df_rapat = pd.read_csv(RAPAT_DB)
     if not df_rapat.empty:
         for idx, row in df_rapat.iterrows():
             with st.expander(f"Rapat ID {row['id']} - {row['tanggal']}"):
@@ -615,6 +639,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                 st.markdown(f"**Status:** {row['status']}")
                 st.caption(f"Terakhir diedit oleh: {row['last_editor']}")
                 
+                # Form edit rapat (admin bisa edit semua field, termasuk pegawai)
                 with st.form(key=f"edit_slot_{row['id']}_{idx}"):
                     tgl = st.date_input("Tanggal", value=pd.to_datetime(row['tanggal']), key=f"tgl_{row['id']}_{idx}")
                     current_pegawai_raw = row['pegawai'].split(" || ") if pd.notna(row['pegawai']) and row['pegawai'] != "" else []
@@ -625,37 +650,33 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                     link_dok = st.text_input("Link Dokumentasi", value=row['link_dokumentasi'] if pd.notna(row['link_dokumentasi']) else "", key=f"dok_{row['id']}_{idx}")
                     update_slot = st.form_submit_button("Update Rapat")
                     if update_slot:
-                        df = safe_load_csv(RAPAT_DB)
+                        df = pd.read_csv(RAPAT_DB)
                         df.loc[df['id'] == row['id'], ['tanggal', 'pegawai', 'link_undangan', 'link_bahan_materi', 'link_dokumentasi']] = [tgl, " || ".join(pegawai_edit), link_und, link_bahan, link_dok]
-                        if safe_save_csv(df, RAPAT_DB):
-                            buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
-                            st.success("Rapat diupdate!")
-                            st.rerun()
-                        else:
-                            st.error("Gagal update rapat.")
-                
+                        df.to_csv(RAPAT_DB, index=False)
+                        buat_notifikasi(row['id'], pegawai_edit, tgl.strftime("%Y-%m-%d"))
+                        st.success("Rapat diupdate!")
+                        st.rerun()
+                # Tombol hapus rapat
                 col1, col2, col3 = st.columns([1,2,1])
                 with col2:
                     if st.button(f"🗑️ Hapus Rapat", key=f"hapus_{row['id']}_{idx}"):
-                        df_temp = safe_load_csv(RAPAT_DB)
+                        df_temp = pd.read_csv(RAPAT_DB)
                         df_temp = df_temp[df_temp['id'] != row['id']]
                         df_temp = df_temp.reset_index(drop=True)
                         df_temp['id'] = df_temp.index + 1
-                        if safe_save_csv(df_temp, RAPAT_DB):
-                            df_notif = safe_load_csv(NOTIF_DB)
-                            df_notif = df_notif[df_notif['id_rapat'] != row['id']]
-                            safe_save_csv(df_notif, NOTIF_DB)
-                            st.success(f"Rapat ID {row['id']} dihapus dan ID telah diurutkan ulang.")
-                            st.rerun()
-                        else:
-                            st.error("Gagal hapus rapat.")
+                        df_temp.to_csv(RAPAT_DB, index=False)
+                        df_notif = pd.read_csv(NOTIF_DB)
+                        df_notif = df_notif[df_notif['id_rapat'] != row['id']]
+                        df_notif.to_csv(NOTIF_DB, index=False)
+                        st.success(f"Rapat ID {row['id']} dihapus dan ID telah diurutkan ulang.")
+                        st.rerun()
     else:
         st.info("Belum ada rapat.")
 
 # ======================= ADMIN: MONITORING RESUME =======================
 if st.session_state.user_role == "Admin" and menu == "Monitoring Resume":
     st.title("Monitoring Pengisian Resume Rapat")
-    df_rapat = safe_load_csv(RAPAT_DB)
+    df_rapat = pd.read_csv(RAPAT_DB)
     if df_rapat.empty:
         st.info("Belum ada rapat.")
     else:
@@ -679,25 +700,24 @@ def form_isi_resume_pegawai(row):
         status = st.selectbox("Status", ["Belum Diisi", "Proses", "Selesai"], index=["Belum Diisi", "Proses", "Selesai"].index(row['status'] if pd.notna(row['status']) else "Belum Diisi"))
         submitted = st.form_submit_button("Simpan Resume")
         if submitted:
-            df = safe_load_csv(RAPAT_DB)
+            df = pd.read_csv(RAPAT_DB)
             idx = df[df['id'] == row['id']].index[0]
             df.at[idx, 'ringkasan_indikator'] = ringkasan
             df.at[idx, 'resume'] = resume
             df.at[idx, 'action_items'] = action
             df.at[idx, 'status'] = status
             df.at[idx, 'last_editor'] = st.session_state.username
-            if safe_save_csv(df, RAPAT_DB):
-                st.success("Resume berhasil disimpan!")
-                st.rerun()
-            else:
-                st.error("Gagal menyimpan resume.")
+            df.to_csv(RAPAT_DB, index=False)
+            st.success("Resume berhasil disimpan!")
+            st.rerun()
 
 if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
     st.title("Isi Resume Rapat yang Ditugaskan")
-    df_rapat = safe_load_csv(RAPAT_DB)
+    df_rapat = pd.read_csv(RAPAT_DB)
     tugas = []
     username_clean = st.session_state.username.strip()
     
+    # Debug info di sidebar
     st.sidebar.markdown("### Debug Info")
     st.sidebar.write(f"Username Anda: `{username_clean}`")
     
@@ -714,7 +734,7 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
         st.info("Anda belum ditugaskan untuk mengisi resume rapat apapun.")
         st.warning("Jika Anda yakin sudah ditugaskan, periksa debug info di sidebar. Kemungkinan nama Anda di rapat tidak sama persis dengan username Anda.")
         if st.button("🔄 Perbaiki Data Rapat (Cocokkan Nama)"):
-            df_fix = safe_load_csv(RAPAT_DB)
+            df_fix = pd.read_csv(RAPAT_DB)
             for idx, row in df_fix.iterrows():
                 if pd.notna(row['pegawai']) and row['pegawai'] != "":
                     daftar = [p.strip() for p in row['pegawai'].split(" || ")]
@@ -725,7 +745,7 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
                         else:
                             new_daftar.append(p)
                     df_fix.at[idx, 'pegawai'] = " || ".join(new_daftar)
-            safe_save_csv(df_fix, RAPAT_DB)
+            df_fix.to_csv(RAPAT_DB, index=False)
             st.success("Data rapat telah diperbaiki. Silakan refresh halaman.")
             st.rerun()
     else:
@@ -742,7 +762,7 @@ if menu == "Rekapan IPH":
     st.title("📋 Rekapan Data IPH - Per Komoditas per Minggu")
     st.markdown("Filter berdasarkan tahun dan bulan. Data akan ditampilkan dalam bentuk tabel pivot secara kronologis.")
 
-    df_iph = safe_load_csv(IPH_DB)
+    df_iph = pd.read_csv(IPH_DB)
     if df_iph.empty:
         st.warning("Belum ada data IPH.")
     else:
@@ -797,6 +817,9 @@ if menu == "Rekapan IPH":
                 with st.expander("Lihat Data Mentah"):
                     st.dataframe(filtered.sort_values(['tahun','bulan','minggu_ke','komoditas']), use_container_width=True)
 
+            # === SHARE LINK DI REKAPAN IPH TELAH DIHAPUS ===
+            # (tidak ada kode share link di sini)
+
 # ======================= INPUT REKAP IPH (Admin & Pegawai) =======================
 if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap IPH":
     st.title("📊 Input Rekap IPH")
@@ -821,7 +844,7 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
                     st.rerun()
         st.stop()
 
-    df_iph = safe_load_csv(IPH_DB)
+    df_iph = pd.read_csv(IPH_DB)
     existing = df_iph[(df_iph['tahun']==tahun) & (df_iph['bulan']==bulan) & (df_iph['minggu_ke']==minggu)]
     edit_df = pd.DataFrame({"Komoditas": komoditas_list})
     edit_df["Harga"] = "0"
@@ -871,9 +894,9 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
             st.rerun()
     with col_reset:
         if st.button("🔄 Reset (kosongkan semua)", use_container_width=True):
-            df_ip_reset = safe_load_csv(IPH_DB)
+            df_ip_reset = pd.read_csv(IPH_DB)
             df_ip_reset = df_ip_reset[~((df_ip_reset['tahun']==tahun) & (df_ip_reset['bulan']==bulan) & (df_ip_reset['minggu_ke']==minggu))]
-            safe_save_csv(df_ip_reset, IPH_DB)
+            df_ip_reset.to_csv(IPH_DB, index=False)
             st.session_state.reset_counter += 1
             st.rerun()
 
@@ -893,12 +916,12 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
             if komoditas_list:
                 kom_hapus = st.selectbox("Pilih komoditas", komoditas_list, key="hapus_kom")
                 if st.button("Hapus Komoditas", key="btn_hapus"):
-                    df_kom = safe_load_csv(KOMODITAS_DB)
+                    df_kom = pd.read_csv(KOMODITAS_DB)
                     df_kom = df_kom[df_kom['komoditas'] != kom_hapus]
-                    safe_save_csv(df_kom, KOMODITAS_DB)
-                    df_ip = safe_load_csv(IPH_DB)
+                    df_kom.to_csv(KOMODITAS_DB, index=False)
+                    df_ip = pd.read_csv(IPH_DB)
                     df_ip = df_ip[df_ip['komoditas'] != kom_hapus]
-                    safe_save_csv(df_ip, IPH_DB)
+                    df_ip.to_csv(IPH_DB, index=False)
                     st.session_state.reset_counter += 1
                     st.rerun()
             else:
@@ -907,13 +930,14 @@ if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap
 # ======================= VISUALISASI IPH =======================
 if menu == "Visualisasi IPH":
     st.markdown("<h1 style='text-align: center;'>📊 Visualisasi Data IPH</h1>", unsafe_allow_html=True)
-    df_iph = safe_load_csv(IPH_DB)
+    df_iph = pd.read_csv(IPH_DB)
     
     if df_iph.empty:
         st.warning("Belum ada data.")
     else:
         bulan_map = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"Mei", 6:"Jun", 7:"Jul", 8:"Agu", 9:"Sep", 10:"Okt", 11:"Nov", 12:"Des"}
 
+        # ======================= BAGIAN SHARE LINK =======================
         st.markdown("### 🔗 Bagikan Laporan Periode Tertentu")
         col_share1, col_share2, col_share3 = st.columns(3)
         with col_share1:
@@ -933,6 +957,7 @@ if menu == "Visualisasi IPH":
         st.info("Salin link di bawah ini untuk dibagikan. Penerima bisa langsung melihat grafik tanpa login.")
         st.code(share_link, language="text")
         st.markdown("---")
+        # ======================= AKHIR BAGIAN SHARE LINK =======================
 
         jenis_grafik = st.selectbox("Pilih Jenis Analisis Grafik:", [
             "Tren Harga (Bulanan/Mingguan)", 
@@ -979,11 +1004,12 @@ if menu == "Visualisasi IPH":
                         for b in range(1,13):
                             cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
                         
+                        # --- GABUNGKAN GRAFIK & TABEL DENGAN SUBPLOTS ---
                         fig = make_subplots(
                             rows=2, cols=1, 
                             shared_xaxes=True,
-                            vertical_spacing=0.05,
-                            row_heights=[0.6, 0.4],
+                            vertical_spacing=0.05, # Kasih jarak dikit antara grafik & tabel
+                            row_heights=[0.6, 0.4], # Grafik 60%, Tabel 40%
                             specs=[[{"type": "scatter"}], [{"type": "table"}]]
                         )
 
@@ -1004,7 +1030,7 @@ if menu == "Visualisasi IPH":
                             go.Table(
                                 header=dict(
                                     values=header_values,
-                                    fill_color='#1e3a8a',
+                                    fill_color='#1e3a8a', # Warna biru BPS
                                     font=dict(color='white', size=12),
                                     align='center'
                                 ),
@@ -1018,15 +1044,17 @@ if menu == "Visualisasi IPH":
                             row=2, col=1
                         )
 
+                        # --- INI BAGIAN YANG BIKIN BULAN KELIHATAN ---
                         fig.update_layout(
                             title="<b>Tren Harga Rata-rata Bulanan</b>",
-                            height=750,
-                            margin=dict(l=20, r=20, t=60, b=80),
+                            height=750, # Ditambah tingginya biar nggak numpuk
+                            margin=dict(l=20, r=20, t=60, b=80), # Margin bawah (b) digedein buat label bulan
                             plot_bgcolor='white',
                             showlegend=True,
                             legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
                         )
 
+                        # Maksa sumbu X nampilin Jan - Des
                         fig.update_xaxes(
                             tickmode='array',
                             tickvals=list(range(1, 13)),
@@ -1040,7 +1068,7 @@ if menu == "Visualisasi IPH":
 
                         st.plotly_chart(fig, use_container_width=True)
             
-            else:
+            else:  # Mingguan
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     th_s = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="th_s_minggu")
@@ -1112,7 +1140,7 @@ if menu == "Analisis IPH":
     st.title("📊 Analisis IPH Otomatis")
     st.markdown("Analisis berdasarkan data IPH yang tersedia. Pilih periode untuk melihat indikator.")
 
-    df_iph = safe_load_csv(IPH_DB)
+    df_iph = pd.read_csv(IPH_DB)
     if df_iph.empty:
         st.warning("Belum ada data IPH. Silakan input data terlebih dahulu.")
     else:
@@ -1157,7 +1185,7 @@ if menu == "Analisis IPH":
 # ======================= PUBLIK: LIHAT RAPAT =======================
 if st.session_state.user_role == "Publik" and menu == "Lihat Rapat":
     st.title("Daftar Rapat TPID")
-    df_rapat = safe_load_csv(RAPAT_DB)
+    df_rapat = pd.read_csv(RAPAT_DB)
     if df_rapat.empty:
         st.info("Belum ada rapat.")
     else:
