@@ -125,62 +125,35 @@ def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
 
 USER_DB = "users_list.csv"
+def init_db():
+    if not os.path.exists(USER_DB):
+        df = pd.DataFrame([["admin", hash_password("admin123"), "Admin"]], columns=["username", "password", "role"])
+        df.to_csv(USER_DB, index=False)
+def add_user(name, pwd):
+    df = pd.read_csv(USER_DB)
+    if name in df['username'].values:
+        return False
+    new_user = pd.DataFrame([[name, hash_password(pwd), "Pegawai"]], columns=["username", "password", "role"])
+    pd.concat([df, new_user]).to_csv(USER_DB, index=False)
+    return True
+def check_login(name, pwd):
+    df = pd.read_csv(USER_DB)
+    hashed = hash_password(pwd)
+    user = df[(df['username'] == name) & (df['password'] == hashed)]
+    if not user.empty:
+        return user.iloc[0]['role']
+    return None
+def login_page():
+    if st.session_state.get("user_role") == "Publik_Shared":
+        return
+init_db()
+
+# --- INISIALISASI DATABASE ---
 RAPAT_DB = "rapat_tpid.csv"
 IPH_DB = "data_iph_harian.csv"
 KOMODITAS_DB = "komoditas_list.csv"
 NOTIF_DB = "notifikasi.csv"
 
-# ======================= FUNGSI PENYIMPANAN AMAN =======================
-def safe_save_csv(df, filepath):
-    """Menyimpan DataFrame ke CSV dengan backup dan atomic write"""
-    if df.empty and not os.path.exists(filepath):
-        # Jika kosong dan file belum ada, tetap simpan (misal file baru)
-        pass
-    # Backup file lama jika ada
-    if os.path.exists(filepath):
-        backup_path = filepath + ".backup"
-        try:
-            shutil.copy2(filepath, backup_path)
-        except Exception as e:
-            st.warning(f"Gagal backup {filepath}: {e}")
-    # Tulis ke file temporary lalu rename
-    temp_path = filepath + ".tmp"
-    try:
-        df.to_csv(temp_path, index=False)
-        shutil.move(temp_path, filepath)
-        return True
-    except Exception as e:
-        st.error(f"Gagal menyimpan {filepath}: {e}")
-        return False
-
-def safe_load_csv(filepath, default_columns=None):
-    """Memuat CSV, fallback ke backup jika rusak"""
-    if not os.path.exists(filepath):
-        if default_columns is not None:
-            return pd.DataFrame(columns=default_columns)
-        return pd.DataFrame()
-    try:
-        df = pd.read_csv(filepath)
-        if default_columns is not None:
-            for col in default_columns:
-                if col not in df.columns:
-                    df[col] = ''
-        return df
-    except Exception:
-        # Coba backup
-        backup_path = filepath + ".backup"
-        if os.path.exists(backup_path):
-            try:
-                df = pd.read_csv(backup_path)
-                st.info(f"Memuat dari backup: {filepath}")
-                return df
-            except:
-                pass
-        if default_columns is not None:
-            return pd.DataFrame(columns=default_columns)
-        return pd.DataFrame()
-
-# --- INISIALISASI DATABASE DENGAN SAFE SAVE ---
 DEFAULT_KOMODITAS = [
     "BERAS", "DAGING AYAM RAS", "TELUR AYAM RAS", "DAGING SAPI",
     "CABAI MERAH", "CABAI RAWIT", "BAWANG MERAH", "BAWANG PUTIH",
@@ -188,27 +161,62 @@ DEFAULT_KOMODITAS = [
 ]
 
 if not os.path.exists(KOMODITAS_DB):
-    df_kom = pd.DataFrame(DEFAULT_KOMODITAS, columns=["komoditas"])
-    safe_save_csv(df_kom, KOMODITAS_DB)
+    pd.DataFrame(DEFAULT_KOMODITAS, columns=["komoditas"]).to_csv(KOMODITAS_DB, index=False)
 
 if not os.path.exists(RAPAT_DB):
     df_rapat = pd.DataFrame(columns=[
         "id", "tanggal", "pegawai", "link_undangan", "link_bahan_materi", "link_dokumentasi",
         "ringkasan_indikator", "resume", "action_items", "status", "last_editor", "created_by", "created_at"
     ])
-    safe_save_csv(df_rapat, RAPAT_DB)
+    df_rapat.to_csv(RAPAT_DB, index=False)
 
 if not os.path.exists(IPH_DB):
     df_iph = pd.DataFrame(columns=[
         "tahun", "bulan", "minggu_ke", "komoditas", "harga", "persen_change", "last_updated"
     ])
-    safe_save_csv(df_iph, IPH_DB)
+    df_iph.to_csv(IPH_DB, index=False)
 
 if not os.path.exists(NOTIF_DB):
     df_notif = pd.DataFrame(columns=["id_rapat", "pegawai", "pesan", "dibaca", "tanggal"])
-    safe_save_csv(df_notif, NOTIF_DB)
+    df_notif.to_csv(NOTIF_DB, index=False)
 
-# --- FUNGSI BANTU ---
+# ======================= FUNGSI PENYIMPANAN AMAN (TAMBAHAN, TIDAK MENGUBAH TAMPILAN) =======================
+def safe_save_csv(df, filepath):
+    """Menyimpan DataFrame ke CSV dengan backup otomatis."""
+    if os.path.exists(filepath):
+        backup_path = filepath + ".backup"
+        try:
+            shutil.copy2(filepath, backup_path)
+        except:
+            pass
+    temp_path = filepath + ".tmp"
+    try:
+        df.to_csv(temp_path, index=False)
+        shutil.move(temp_path, filepath)
+        return True
+    except:
+        return False
+
+def safe_load_csv(filepath, default_columns=None):
+    """Memuat CSV, fallback ke backup jika rusak."""
+    if not os.path.exists(filepath):
+        if default_columns is not None:
+            return pd.DataFrame(columns=default_columns)
+        return pd.DataFrame()
+    try:
+        return pd.read_csv(filepath)
+    except:
+        backup_path = filepath + ".backup"
+        if os.path.exists(backup_path):
+            try:
+                return pd.read_csv(backup_path)
+            except:
+                pass
+        if default_columns is not None:
+            return pd.DataFrame(columns=default_columns)
+        return pd.DataFrame()
+
+# --- FUNGSI BANTU (dengan safe load) ---
 def get_minggu_dari_tanggal(tanggal):
     day = tanggal.day
     if day <= 7: return 1
@@ -293,9 +301,7 @@ def update_persen_change():
     safe_save_csv(df, IPH_DB)
 
 def save_iph_data(tahun, bulan, minggu_ke, komoditas_list, harga_list):
-    df = safe_load_csv(IPH_DB, default_columns=[
-        "tahun", "bulan", "minggu_ke", "komoditas", "harga", "persen_change", "last_updated"
-    ])
+    df = safe_load_csv(IPH_DB)
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     for komoditas, harga in zip(komoditas_list, harga_list):
         existing = df[(df['tahun'] == tahun) & (df['bulan'] == bulan) & (df['minggu_ke'] == minggu_ke) & (df['komoditas'] == komoditas)]
@@ -304,11 +310,7 @@ def save_iph_data(tahun, bulan, minggu_ke, komoditas_list, harga_list):
             df.at[idx, 'harga'] = harga
             df.at[idx, 'last_updated'] = now_str
         else:
-            new_row = pd.DataFrame([{
-                'tahun': tahun, 'bulan': bulan, 'minggu_ke': minggu_ke,
-                'komoditas': komoditas, 'harga': harga,
-                'persen_change': 0, 'last_updated': now_str
-            }])
+            new_row = pd.DataFrame([{'tahun': tahun, 'bulan': bulan, 'minggu_ke': minggu_ke, 'komoditas': komoditas, 'harga': harga, 'persen_change': 0, 'last_updated': now_str}])
             df = pd.concat([df, new_row], ignore_index=True)
     if safe_save_csv(df, IPH_DB):
         update_persen_change()
@@ -325,33 +327,9 @@ def add_komoditas(nama_baru):
         return safe_save_csv(df, KOMODITAS_DB)
     return False
 
-# --- FUNGSI USER DB ---
-def init_db():
-    if not os.path.exists(USER_DB):
-        df = pd.DataFrame([["admin", hash_password("admin123"), "Admin"]], columns=["username", "password", "role"])
-        safe_save_csv(df, USER_DB)
-
-def add_user(name, pwd):
-    df = safe_load_csv(USER_DB)
-    if name in df['username'].values:
-        return False
-    new_user = pd.DataFrame([[name, hash_password(pwd), "Pegawai"]], columns=["username", "password", "role"])
-    df = pd.concat([df, new_user], ignore_index=True)
-    return safe_save_csv(df, USER_DB)
-
-def check_login(name, pwd):
-    df = safe_load_csv(USER_DB)
-    hashed = hash_password(pwd)
-    user = df[(df['username'] == name) & (df['password'] == hashed)]
-    if not user.empty:
-        return user.iloc[0]['role']
-    return None
-
-init_db()
-
-# --- FUNGSI NOTIFIKASI ---
+# --- FUNGSI NOTIFIKASI (dengan safe load) ---
 def buat_notifikasi(id_rapat, daftar_pegawai, tanggal):
-    df_notif = safe_load_csv(NOTIF_DB, default_columns=["id_rapat", "pegawai", "pesan", "dibaca", "tanggal"])
+    df_notif = safe_load_csv(NOTIF_DB)
     for peg in daftar_pegawai:
         if not ((df_notif['id_rapat'] == id_rapat) & (df_notif['pegawai'] == peg)).any():
             new_notif = pd.DataFrame([{
@@ -498,6 +476,7 @@ if st.session_state.user_role == "Pegawai":
                 st.rerun()
     else:
         st.sidebar.markdown("Tidak ada notifikasi baru")
+
         st.sidebar.markdown("---")
 
 if st.session_state.user_role == "Admin":
@@ -547,9 +526,9 @@ if menu == "Beranda":
         st.markdown(f"<div class='metric-card'><h3>Indeks Perkembangan Harga</h3><p style='font-size:2rem;'>{indeks_text}</p><p>{indeks_caption}</p></div>", unsafe_allow_html=True)
     with col2:
         df_rapat_cnt = safe_load_csv(RAPAT_DB)
-        st.markdown(f"<div class='metric-card'><h3>Rapat TPID</h3><p style='font-size:2rem;'>{len(df_rapat_cnt)}</p><p>Total rapat</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h3>Rapat TPID</h3><p style='font-size:2rem;'>"+str(len(df_rapat_cnt))+"</p><p>Total rapat</p></div>", unsafe_allow_html=True)
     with col3:
-        st.markdown(f"<div class='metric-card'><h3>Pegawai Aktif</h3><p style='font-size:2rem;'>{len(DAFTAR_PEGAWAI)}</p><p>Anggota tim</p></div>", unsafe_allow_html=True)
+        st.markdown("<div class='metric-card'><h3>Pegawai Aktif</h3><p style='font-size:2rem;'>"+str(len(DAFTAR_PEGAWAI))+"</p><p>Anggota tim</p></div>", unsafe_allow_html=True)
     st.markdown("---")
     st.subheader("Sekilas tentang Dashboard")
     st.markdown("""
@@ -570,31 +549,11 @@ if menu == "Beranda":
 if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
     st.title("Kelola Rapat TPID")
     
-    # Tombol backup & restore untuk data rapat
-    st.markdown("### 🛡️ Pengamanan Data Rapat")
-    col1r, col2r = st.columns(2)
-    with col1r:
-        if st.button("📀 Backup Data Rapat Sekarang", use_container_width=True):
-            if os.path.exists(RAPAT_DB):
-                backup_name = f"{RAPAT_DB}_manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                shutil.copy2(RAPAT_DB, backup_name)
-                st.success(f"Backup disimpan: {backup_name}")
-            else:
-                st.warning("Tidak ada data rapat.")
-    with col2r:
-        if st.button("🔄 Restore Data Rapat dari Backup Otomatis", use_container_width=True):
-            backup_path = RAPAT_DB + ".backup"
-            if os.path.exists(backup_path):
-                shutil.copy2(backup_path, RAPAT_DB)
-                st.success("Restore berhasil. Refresh halaman.")
-                st.rerun()
-            else:
-                st.warning("Tidak ada file backup otomatis.")
-    st.markdown("---")
-    
     if 'form_key' not in st.session_state:
         st.session_state.form_key = 0
+    
     form_key = f"form_rapat_baru_{st.session_state.form_key}"
+    
     with st.form(form_key):
         tanggal = st.date_input("Tanggal Rapat", datetime.now())
         pegawai_terpilih = st.multiselect("Pilih Pegawai Yang Bertugas Mengisi Resume", DAFTAR_PEGAWAI)
@@ -617,6 +576,7 @@ if st.session_state.user_role == "Admin" and menu == "Kelola Rapat":
                 minggu_rapat = get_minggu_dari_tanggal(tanggal)
                 df_iph_rapat = safe_load_csv(IPH_DB)
                 ringkasan_awal = generate_ringkasan_indikator(tahun_rapat, bulan_rapat, minggu_rapat, df_iph_rapat)
+                
                 df = safe_load_csv(RAPAT_DB)
                 new_id = len(df) + 1 if not df.empty else 1
                 new_row = pd.DataFrame([{
@@ -737,14 +697,22 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
     df_rapat = safe_load_csv(RAPAT_DB)
     tugas = []
     username_clean = st.session_state.username.strip()
+    
+    st.sidebar.markdown("### Debug Info")
+    st.sidebar.write(f"Username Anda: `{username_clean}`")
+    
     for _, row in df_rapat.iterrows():
         if pd.notna(row['pegawai']) and row['pegawai'] != "":
             daftar_pegawai_raw = row['pegawai'].split(" || ")
             daftar_pegawai = [p.strip() for p in daftar_pegawai_raw]
+            st.sidebar.write(f"Rapat {row['id']} ({row['tanggal']}) → Pegawai: {daftar_pegawai}")
             if any(username_clean.lower() == p.lower() for p in daftar_pegawai):
                 tugas.append(row)
+                st.sidebar.success(f"✅ Cocok! Rapat {row['id']} ditugaskan.")
+    
     if not tugas:
         st.info("Anda belum ditugaskan untuk mengisi resume rapat apapun.")
+        st.warning("Jika Anda yakin sudah ditugaskan, periksa debug info di sidebar. Kemungkinan nama Anda di rapat tidak sama persis dengan username Anda.")
         if st.button("🔄 Perbaiki Data Rapat (Cocokkan Nama)"):
             df_fix = safe_load_csv(RAPAT_DB)
             for idx, row in df_fix.iterrows():
@@ -769,33 +737,11 @@ if st.session_state.user_role == "Pegawai" and menu == "Isi Resume Rapat":
                 st.markdown("---")
                 form_isi_resume_pegawai(row)
 
-# ======================= REKAPAN IPH =======================
+# ======================= REKAPAN DATA IPH (PIVOT) =======================
 if menu == "Rekapan IPH":
     st.title("📋 Rekapan Data IPH - Per Komoditas per Minggu")
-    
-    # Tombol backup & restore untuk data IPH
-    st.markdown("### 🛡️ Pengamanan Data IPH")
-    col1b, col2b = st.columns(2)
-    with col1b:
-        if st.button("📀 Backup Data IPH Sekarang", use_container_width=True):
-            if os.path.exists(IPH_DB):
-                backup_name = f"{IPH_DB}_manual_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-                shutil.copy2(IPH_DB, backup_name)
-                st.success(f"Backup disimpan: {backup_name}")
-            else:
-                st.warning("Tidak ada data IPH.")
-    with col2b:
-        if st.button("🔄 Restore Data IPH dari Backup Otomatis", use_container_width=True):
-            backup_path = IPH_DB + ".backup"
-            if os.path.exists(backup_path):
-                shutil.copy2(backup_path, IPH_DB)
-                st.success("Restore berhasil. Refresh halaman.")
-                st.rerun()
-            else:
-                st.warning("Tidak ada file backup otomatis.")
-    st.markdown("---")
-    
     st.markdown("Filter berdasarkan tahun dan bulan. Data akan ditampilkan dalam bentuk tabel pivot secara kronologis.")
+
     df_iph = safe_load_csv(IPH_DB)
     if df_iph.empty:
         st.warning("Belum ada data IPH.")
@@ -807,12 +753,14 @@ if menu == "Rekapan IPH":
         with col2:
             bulan_list = sorted(df_iph['bulan'].unique())
             bulan_pilih = st.multiselect("Pilih Bulan", bulan_list, default=bulan_list, format_func=lambda x: ["Jan","Feb","Mar","Apr","Mei","Jun","Jul","Agu","Sep","Okt","Nov","Des"][x-1])
+
         komoditas_all = get_komoditas_list()
         pilih_semua_kom = st.checkbox("Pilih Semua Komoditas", value=True)
         if pilih_semua_kom:
             komoditas_pilih = komoditas_all
         else:
             komoditas_pilih = st.multiselect("Pilih Komoditas", komoditas_all, default=komoditas_all[:5])
+
         if not tahun_pilih or not bulan_pilih or not komoditas_pilih:
             st.info("Pilih minimal satu tahun, satu bulan, dan satu komoditas.")
         else:
@@ -849,7 +797,7 @@ if menu == "Rekapan IPH":
                 with st.expander("Lihat Data Mentah"):
                     st.dataframe(filtered.sort_values(['tahun','bulan','minggu_ke','komoditas']), use_container_width=True)
 
-# ======================= INPUT REKAP IPH =======================
+# ======================= INPUT REKAP IPH (Admin & Pegawai) =======================
 if (st.session_state.user_role in ["Admin", "Pegawai"]) and menu == "Input Rekap IPH":
     st.title("📊 Input Rekap IPH")
 
@@ -966,7 +914,6 @@ if menu == "Visualisasi IPH":
     else:
         bulan_map = {1:"Jan", 2:"Feb", 3:"Mar", 4:"Apr", 5:"Mei", 6:"Jun", 7:"Jul", 8:"Agu", 9:"Sep", 10:"Okt", 11:"Nov", 12:"Des"}
 
-        # Bagian share link
         st.markdown("### 🔗 Bagikan Laporan Periode Tertentu")
         col_share1, col_share2, col_share3 = st.columns(3)
         with col_share1:
@@ -996,6 +943,7 @@ if menu == "Visualisasi IPH":
 
         if jenis_grafik == "Tren Harga (Bulanan/Mingguan)":
             mode = st.radio("Pilih Level Tampilan:", ["Bulanan (Perbandingan Tahun)", "Mingguan (Detail Harga Asli)"], horizontal=True)
+            
             if mode == "Bulanan (Perbandingan Tahun)":
                 col1, col2 = st.columns(2)
                 with col1:
@@ -1004,6 +952,7 @@ if menu == "Visualisasi IPH":
                 with col2:
                     th_all = sorted(df_iph['tahun'].unique(), reverse=True)
                     th_pilih = st.multiselect("Pilih Tahun", th_all, default=th_all[:3] if len(th_all) >= 3 else th_all)
+                
                 if not kom_pilih or not th_pilih:
                     st.info("Pilih komoditas dan tahun.")
                 else:
@@ -1013,28 +962,84 @@ if menu == "Visualisasi IPH":
                     else:
                         plot_df = plot_df.groupby(['tahun', 'bulan', 'komoditas'])['harga'].mean().reset_index()
                         plot_df['legenda'] = plot_df['tahun'].astype(str) + " - " + plot_df['komoditas']
+                        
                         tab_pivot = plot_df.pivot_table(index='legenda', columns='bulan', values='harga').reset_index()
                         for b in range(1,13):
                             if b not in tab_pivot.columns:
                                 tab_pivot[b] = None
                         tab_pivot = tab_pivot[['legenda'] + list(range(1,13))]
+                        
                         def format_ribuan(x):
                             if pd.isna(x):
                                 return ""
                             return f"{x:,.2f}".replace(",", "X").replace(".", ",").replace("X", ".")
+                        
                         header_values = ['<b>Tahun / Komoditas</b>'] + [f"<b>{bulan_map[i]}</b>" for i in range(1,13)]
                         cell_values = [tab_pivot['legenda'].tolist()]
                         for b in range(1,13):
                             cell_values.append([format_ribuan(v) for v in tab_pivot[b]])
-                        fig = make_subplots(rows=2, cols=1, shared_xaxes=True, vertical_spacing=0.05, row_heights=[0.6, 0.4], specs=[[{"type": "scatter"}], [{"type": "table"}]])
+                        
+                        fig = make_subplots(
+                            rows=2, cols=1, 
+                            shared_xaxes=True,
+                            vertical_spacing=0.05,
+                            row_heights=[0.6, 0.4],
+                            specs=[[{"type": "scatter"}], [{"type": "table"}]]
+                        )
+
                         for leg in tab_pivot['legenda']:
                             data_leg = plot_df[plot_df['legenda'] == leg].sort_values('bulan')
-                            fig.add_trace(go.Scatter(x=data_leg['bulan'], y=data_leg['harga'], mode='lines+markers', line=dict(width=3), name=leg), row=1, col=1)
-                        fig.add_trace(go.Table(header=dict(values=header_values, fill_color='#1e3a8a', font=dict(color='white', size=12), align='center'), cells=dict(values=cell_values, fill_color='white', align=['left'] + ['center']*12, height=25)), row=2, col=1)
-                        fig.update_layout(title="<b>Tren Harga Rata-rata Bulanan</b>", height=750, margin=dict(l=20, r=20, t=60, b=80), plot_bgcolor='white', showlegend=True, legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1))
-                        fig.update_xaxes(tickmode='array', tickvals=list(range(1,13)), ticktext=list(bulan_map.values()), showgrid=True, gridcolor='lightgray', row=1, col=1)
+                            fig.add_trace(
+                                go.Scatter(
+                                    x=data_leg['bulan'], 
+                                    y=data_leg['harga'],
+                                    mode='lines+markers',
+                                    line=dict(width=3), 
+                                    name=leg
+                                ),
+                                row=1, col=1
+                            )
+
+                        fig.add_trace(
+                            go.Table(
+                                header=dict(
+                                    values=header_values,
+                                    fill_color='#1e3a8a',
+                                    font=dict(color='white', size=12),
+                                    align='center'
+                                ),
+                                cells=dict(
+                                    values=cell_values,
+                                    fill_color='white',
+                                    align=['left'] + ['center']*12,
+                                    height=25
+                                )
+                            ),
+                            row=2, col=1
+                        )
+
+                        fig.update_layout(
+                            title="<b>Tren Harga Rata-rata Bulanan</b>",
+                            height=750,
+                            margin=dict(l=20, r=20, t=60, b=80),
+                            plot_bgcolor='white',
+                            showlegend=True,
+                            legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+                        )
+
+                        fig.update_xaxes(
+                            tickmode='array',
+                            tickvals=list(range(1, 13)),
+                            ticktext=list(bulan_map.values()),
+                            showgrid=True,
+                            gridcolor='lightgray',
+                            row=1, col=1
+                        )
+                        
                         fig.update_yaxes(title="Harga (Rp)", showgrid=True, gridcolor='lightgray', row=1, col=1)
+
                         st.plotly_chart(fig, use_container_width=True)
+            
             else:
                 col1, col2, col3 = st.columns(3)
                 with col1:
@@ -1044,8 +1049,10 @@ if menu == "Visualisasi IPH":
                 with col3:
                     k_all = sorted(df_iph['komoditas'].unique())
                     k_m = st.multiselect("Komoditas", k_all, default=k_all[:3] if k_all else [], key="k_m_minggu")
+                
                 minggu_tersedia = sorted(df_iph[(df_iph['tahun']==th_s) & (df_iph['bulan']==bl_s)]['minggu_ke'].unique())
                 minggu_pilih = st.multiselect("Pilih Minggu ke-", minggu_tersedia, default=minggu_tersedia, key="minggu_pilih")
+                
                 if not k_m or not minggu_pilih:
                     st.info("Pilih komoditas dan minggu.")
                 else:
@@ -1055,6 +1062,7 @@ if menu == "Visualisasi IPH":
                     else:
                         fig = px.line(plot_df, x='minggu_ke', y='harga', color='komoditas', markers=True, title="Harga Asli Mingguan")
                         st.plotly_chart(fig, use_container_width=True)
+                        
                         st.write("**Tabel Harga Asli (Rp):**")
                         tab_m = plot_df.pivot_table(index='komoditas', columns='minggu_ke', values='harga', fill_value=0)
                         st.dataframe(tab_m, use_container_width=True)
@@ -1062,6 +1070,7 @@ if menu == "Visualisasi IPH":
         elif jenis_grafik == "Andil Perubahan Harga (Frekuensi)":
             df_iph['persen_change'] = pd.to_numeric(df_iph['persen_change'], errors='coerce').fillna(0)
             andil_df = df_iph[df_iph['persen_change'] != 0].groupby('komoditas').size().reset_index(name='frekuensi')
+            
             if andil_df.empty:
                 st.info("Belum ada data perubahan harga (semua masih 0%).")
             else:
@@ -1084,6 +1093,7 @@ if menu == "Visualisasi IPH":
         elif jenis_grafik == "Indikator Perubahan Harga (%)":
             th_p = st.selectbox("Tahun", sorted(df_iph['tahun'].unique(), reverse=True), key="th_p_ind")
             k_p = st.multiselect("Pilih Komoditas", sorted(df_iph['komoditas'].unique()), default=sorted(df_iph['komoditas'].unique())[:2], key="k_p_ind")
+            
             if not k_p:
                 st.info("Pilih komoditas.")
             else:
@@ -1092,6 +1102,7 @@ if menu == "Visualisasi IPH":
                 fig = px.line(ind_df, x='periode', y='persen_change', color='komoditas', markers=True, title="Perubahan Harga (%)")
                 fig.add_hline(y=0, line_dash="dash", line_color="red")
                 st.plotly_chart(fig, use_container_width=True)
+                
                 st.write("**Tabel Perubahan (%):**")
                 tab_persen = ind_df.pivot_table(index='komoditas', columns='periode', values='persen_change', fill_value=0)
                 st.dataframe(tab_persen, use_container_width=True)
@@ -1100,6 +1111,7 @@ if menu == "Visualisasi IPH":
 if menu == "Analisis IPH":
     st.title("📊 Analisis IPH Otomatis")
     st.markdown("Analisis berdasarkan data IPH yang tersedia. Pilih periode untuk melihat indikator.")
+
     df_iph = safe_load_csv(IPH_DB)
     if df_iph.empty:
         st.warning("Belum ada data IPH. Silakan input data terlebih dahulu.")
@@ -1120,6 +1132,7 @@ if menu == "Analisis IPH":
                 minggu_pilih = st.selectbox("Minggu ke-", minggu_list, index=len(minggu_list)-1 if minggu_list else 0)
             else:
                 minggu_pilih = None
+
         if not bulan_pilih or not minggu_pilih:
             st.info("Tidak ada data untuk periode ini.")
         else:
