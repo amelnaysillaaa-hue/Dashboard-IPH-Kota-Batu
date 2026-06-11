@@ -347,6 +347,27 @@ DEFAULT_KOMODITAS = [
     "MINYAK GORENG", "GULA PASIR", "TEPUNG TERIGU", "PISANG", "JERUK"
 ]
 
+DEFAULT_PEGAWAI_LIST = [
+    "Yuniarni Erry Wahyuti",
+    "Adam Mahmud",
+    "Gatot Suharmoko",
+    "Muhammad Arief Nurohman",
+    "Sayu Made Widiari",
+    "Eka Cahyani",
+    "Dwi Esti Kurniasih",
+    "Arif Nugroho Wicaksono",
+    "FX Gugus Febri Putranto",
+    "Sulistyono",
+    "Adina Astasia",
+    "Eko Wibowo",
+    "Singgih Wicaksono",
+    "Nurlaila Oktarahmayanti",
+    "Dhika Devara Prihastiono",
+    "Mulia Estiwilaras",
+    "Wahyu Mega Alfazip",
+    "Vanny Septiana Larasanti",
+]
+
 df_kom = read_gsheet(KOMODITAS_SHEET)
 if df_kom.empty:
     write_gsheet(KOMODITAS_SHEET, pd.DataFrame(DEFAULT_KOMODITAS, columns=["komoditas"]))
@@ -381,6 +402,10 @@ if df_notif.empty:
     write_gsheet(NOTIF_SHEET, df_notif)
 
 # 5. Pegawai
+df_peg = read_gsheet(PEGAWAI_SHEET)
+if df_peg.empty:
+    write_gsheet(PEGAWAI_SHEET, pd.DataFrame(DEFAULT_PEGAWAI_LIST, columns=["nama"]))
+
 def load_pegawai():
     df = read_gsheet(PEGAWAI_SHEET)
     return df['nama'].tolist()
