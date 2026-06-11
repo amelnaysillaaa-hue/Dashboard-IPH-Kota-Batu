@@ -37,6 +37,10 @@ def read_gsheet(sheet_name):
         return pd.DataFrame(columns=headers)
     except gspread.exceptions.WorksheetNotFound:
         return pd.DataFrame()
+    except gspread.exceptions.APIError as e:
+        # Jika terjadi APIError, anggap sheet belum bisa diakses / belum ada
+        st.warning(f"Gagal membaca sheet '{sheet_name}', akan dibuat baru. Error: {e}")
+        return pd.DataFrame()
 
 def write_gsheet(sheet_name, df):
     try:
